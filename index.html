@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>深影 歌リスト</title>
+
+    <style type="text/css">
+      #playlist {
+        background-color: black;
+        color: #aaaaaa;
+      }
+      .playparts {
+        padding: 10px;
+        cursor: pointer;
+      }
+      .playparts:not(:last-child) {
+        border-bottom: 1px #aaa solid;
+      }
+      .songtitle {
+        color:white;
+      }
+      /* ヘッダー部分のスタイル */
+      #header {
+        background-color: #333;
+        color: white;
+        padding: 10px;
+        text-align: center;
+      }
+      #shuffleButton {
+        background-color: #444;
+        border: none;
+        padding: 10px 20px;
+        color: white;
+        cursor: pointer;
+      }
+      #shuffleButton:hover {
+        background-color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ヘッダーにシャッフルボタンを追加 -->
+    <div id="header">
+      <button id="shuffleButton">シャッフル</button>
+    </div>
+
+    <div id="player"></div>
+    <div id="playlist"></div>
+
+    <script>
+      // 動画リスト
+      // GoogleスプレッドシートのCSVデータURL
+      const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS5KPXtSwvF34dTvt8Uhu7TLm7E1oZ_eN5--LJKB0yGGldDfOrKpM4IwqB0ct5q1hjvOjFV05FfHXu_/pub?gid=0&single=true&output=csv';
+
+      /// CSVをパースする関数
+      async function fetchCSVData() {
+      const response = await fetch(csvUrl);
+      const csvText = await response.text();
+
+      // CSVを行単位に分割
+      const rows = csvText.split("\n").map(row => row.split(","));
+
+      // 最初の行はヘッダーなのでスキップ
+      const playList = rows.slice(2).map(row => {
+        const videoUrl = row[4]; // E列（URL）
+        // C列（videoId）が空でない場合のみ処理を実行
+        if (!videoUrl) {
+          return null;  // 空の行はスキップ
+        }
+        
+        const { videoId, startSeconds } = parseYouTubeUrl(videoUrl);
+
+        // videoIdが正しく取得できた場合のみ処理を続行
+        if (!videoId) {
+          return null;  // videoIdがないURLはスキップ
+        }
+
+        const errorCheck = row[6]; // G列
+
+        // 埋め込み不可ではない場合のみ処理を続行
+        if (errorCheck === '埋め込み不可') {
+          return null;  // videoIdがないURLはスキップ
+        }
+        
+      
+        const duration = parseInt(row[5], 10); // F列（インデックス5）
+        const title = row[2]; // C列（インデックス2）
+        const artist = row[3]; // D列（インデックス3）
+
+        const endSeconds = startSeconds + duration;
+
+        return { videoId, startSeconds, endSeconds, title, artist };
+      }).filter(item => item !== null);  // nullのデータを除外
+
+      return playList;
+    }
+
+      // Iframe APIの準備
+      var tag = document.createElement('script');
+      tag.src = "https://www.youtube.com/iframe_api";
+      var firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+      // プレイヤーの設定
+      var player;
+      var playList = []; // 初期空のリスト
+
+      async function onYouTubeIframeAPIReady() {
+        // CSVデータを取得
+        playList = await fetchCSVData();
+        showList(); // データ取得後にリストを表示
+
+        player = new YT.Player('player', {
+          height: '360',
+          width: '640',
+          events: {
+            'onReady': onPlayerReady,
+            'onStateChange': onPlayerStateChange
+          }
+        });
+      }
+
+      // プレイヤーの準備完了後の処理（最初の動画のセット）
+      var isReady = false;
+      var nowPlaying = 0;
+      var isNextVideo = false;
+      function onPlayerReady(event) {
+        player.cueVideoById(playList[nowPlaying]);
+        document.getElementById("song"+nowPlaying).style.color = 'red';
+        isReady = true;
+      }
+
+      // プレイヤーの状態が変化した時の処理（次の動画へ進む）
+      function onPlayerStateChange(event) {
+        if (event.data == YT.PlayerState.ENDED && !isNextVideo) {
+          document.getElementById("song"+nowPlaying).style.color = 'white';
+          nowPlaying += 1;
+          if (playList.length <= nowPlaying) nowPlaying = 0;
+          isNextVideo = true;
+          player.loadVideoById(playList[nowPlaying]);
+          document.getElementById("song"+nowPlaying).style.color = 'red';
+        } else if (event.data == YT.PlayerState.PLAYING && isNextVideo) {
+          isNextVideo = false;
+        }
+      }
+
+      // リストの表示
+      function showList() {
+        var parent = document.getElementById("playlist");
+        parent.innerHTML = ''; // 既存のリストをクリア
+        for (let i = 0; i < playList.length; i++) {
+          var min = Math.floor((playList[i].endSeconds - playList[i].startSeconds) / 60);
+          var sec = ('00' + (playList[i].endSeconds - playList[i].startSeconds) % 60).slice(-2);
+          var parts = document.createElement("div");
+          parent.appendChild(parts);
+          var html = '<p><span class="songtitle" id="song' + i + '">';
+          html += playList[i].title;
+          html += '</span><span class="time">（' + min + ':' + sec + '）</span></p><p class="artist">';
+          html += playList[i].artist;
+          html += '</p>';
+          parts.innerHTML += html;
+          parts.classList.add("playparts");
+          parts.addEventListener("click", () => { pushList(i + ""); }, false);
+        }
+      }
+      // 配列をランダムに並び替える関数
+      function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]]; // 配列の要素を交換
+        }
+      }
+
+      // 初期表示時に通常の順番でリストを表示
+      showList();
+
+      // シャッフルボタンのクリックイベント
+      document.getElementById("shuffleButton").addEventListener("click", function() {
+        shuffleArray(playList);  // playListをシャッフル
+        showList();  // シャッフル後のリストを再描画
+      });
+      
+      // リストをクリックされた時の処理
+      function pushList (id) {
+        if (!isReady) return;
+        document.getElementById("song"+nowPlaying).style.color = 'white';
+        nowPlaying = Number(id);
+        player.loadVideoById(playList[nowPlaying]);
+        document.getElementById("song"+nowPlaying).style.color = 'red';
+      }
+
+      // YouTubeのURLから videoId と startSeconds を抽出する関数
+      function parseYouTubeUrl(url) {
+      const idMatch = url.match(/(?:v=|youtu\.be\/|\/live\/)([a-zA-Z0-9_-]{11})/);
+      const videoId = idMatch ? idMatch[1] : null;
+
+      // 再生秒数を抽出（t=45 や &t=90s など）
+      let startSeconds = 0;
+      const timeMatch = url.match(/[?&]t=(\d+)(s)?/);
+      if (timeMatch && timeMatch[1]) {
+      startSeconds = parseInt(timeMatch[1], 10);
+      }
+
+      return { videoId, startSeconds };
+      }
+    </script>
+  </body>
+</html>
