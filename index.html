@@ -11,13 +11,21 @@
         color: #aaaaaa;
       }
 
-      /* 横並びにするコンテナ */
+      /* 共通：中央寄せのための親 */
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: sans-serif;
+      }
+
+      /* 横並び中央寄せ */
       #content {
         display: flex;
         flex-direction: row;
         align-items: flex-start;
-        padding: 20px;
+        justify-content: center; /* ←中央寄せ！ */
         gap: 20px;
+        padding: 20px;
       }
 
       /* プレイヤー部分 */
@@ -35,18 +43,14 @@
         padding: 10px;
       }
 
-      /* スマホなど狭い画面では縦並びにする */
+      /* スマホ対応（768px以下） */
       @media (max-width: 768px) {
         #content {
-          display: block;
-          padding: 0;
+          flex-direction: column;
+          align-items: center; /* 縦並び時も中央寄せ */
+          padding: 10px;
         }
 
-        #player {
-          width: 100%;
-        }
-
-        /* YouTube iframe に自動サイズ調整 */
         #player iframe {
           width: 100% !important;
           height: auto !important;
@@ -56,9 +60,9 @@
 
         #playlist {
           width: 100%;
-          max-height: calc(100vh - 56.25vw); /* 16:9比率のプレイヤーの高さ分を引く */
+          max-width: 640px; /* 最大幅を制限（大きくなりすぎ防止） */
+          max-height: calc(100vh - 56.25vw);
           overflow-y: auto;
-          padding: 10px;
         }
       }
 
@@ -79,22 +83,32 @@
         padding: 10px;
         text-align: center;
       }
-      #shuffleButton {
+      /* 共通ボタンスタイル */
+      #header button {
         background-color: #444;
         border: none;
         padding: 10px 20px;
         color: white;
         cursor: pointer;
+        margin-right: 8px;
+        font-size: 16px;
       }
-      #shuffleButton:hover {
+      #header button:hover {
         background-color: #666;
+      }
+      /* もし最後のボタンのmarginを消したい場合 */
+      #header button:last-child {
+        margin-right: 0;
       }
     </style>
   </head>
   <body>
-    <!-- ヘッダーにシャッフルボタンを追加 -->
+    <!-- ヘッダーにボタンを追加 -->
     <div id="header">
+      <button id="resetButton">元に戻す</button>
       <button id="shuffleButton">シャッフル</button>
+      <button id="dedupButton">被りなし</button>
+      <button id="dedupShuffleButton">被りなしシャッフル</button>
     </div>
 
     <div id="content">
@@ -158,12 +172,15 @@
 
       // プレイヤーの設定
       var player;
-      var playList = []; // 初期空のリスト
+      var playList = [];
+      var originalPlayList = []; // 元の順番を保存しておく変数
 
       async function onYouTubeIframeAPIReady() {
         // CSVデータを取得
         playList = await fetchCSVData();
-        showList(); // データ取得後にリストを表示
+        originalPlayList = JSON.parse(JSON.stringify(playList)); // ディープコピーで保持
+
+        showList(); // 表示更新
 
         player = new YT.Player('player', {
           height: '360',
@@ -174,6 +191,7 @@
           }
         });
       }
+
 
       // プレイヤーの準備完了後の処理（最初の動画のセット）
       var isReady = false;
@@ -233,6 +251,36 @@
       document.getElementById("shuffleButton").addEventListener("click", function() {
         shuffleArray(playList);  // playListをシャッフル
         showList();  // シャッフル後のリストを再描画
+        player.cueVideoById(playList[nowPlaying]);
+        document.getElementById("song" + nowPlaying).style.color = 'red';
+      });
+
+      document.getElementById("dedupButton").addEventListener("click", function () {
+        // 元の順番のリストから被り除去
+        const deduped = removeDuplicatesFromPlaylist(originalPlayList);
+        playList = deduped;
+        nowPlaying = 0;
+        showList();
+        player.cueVideoById(playList[nowPlaying]);
+        document.getElementById("song" + nowPlaying).style.color = 'red';
+      });
+
+      document.getElementById("resetButton").addEventListener("click", function () {
+        playList = JSON.parse(JSON.stringify(originalPlayList)); // 元の順番に戻す
+        nowPlaying = 0;
+        showList();
+        player.cueVideoById(playList[nowPlaying]);
+        document.getElementById("song" + nowPlaying).style.color = 'red';
+      });
+
+      document.getElementById("dedupShuffleButton").addEventListener("click", function () {
+        const deduped = removeDuplicatesFromPlaylist(originalPlayList);
+        shuffleArray(deduped);
+        playList = deduped;
+        nowPlaying = 0;
+        showList();
+        player.cueVideoById(playList[nowPlaying]);
+        document.getElementById("song" + nowPlaying).style.color = 'red';
       });
       
       // リストをクリックされた時の処理
@@ -257,6 +305,18 @@
       }
 
       return { videoId, startSeconds };
+      }
+
+      // 重複を排除（後方を優先）
+      function removeDuplicatesFromPlaylist(playlist) {
+        const seen = new Map();
+        for (let i = playlist.length - 1; i >= 0; i--) {
+          const key = playlist[i].title.trim() + '|' + playlist[i].artist.trim();
+          if (!seen.has(key)) {
+            seen.set(key, playlist[i]);
+          }
+        }
+        return Array.from(seen.values()).reverse(); // 元の順に戻す
       }
 
       
