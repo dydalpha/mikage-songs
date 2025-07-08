@@ -10,6 +10,49 @@
         background-color: black;
         color: #aaaaaa;
       }
+
+      /* 横並びにするコンテナ */
+      #content {
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        padding: 20px;
+        gap: 20px;
+      }
+
+      /* プレイヤー部分 */
+      #player {
+        flex-shrink: 0;
+      }
+
+      /* プレイリスト部分 */
+      #playlist {
+        background-color: black;
+        color: #aaaaaa;
+        width: 300px;
+        max-height: 360px;
+        overflow-y: auto;
+        padding: 10px;
+      }
+
+      /* スマホなど狭い画面では縦並びにする */
+      @media (max-width: 768px) {
+        #content {
+          flex-direction: column;
+          padding: 10px;
+        }
+
+        #playlist {
+          width: 100%;
+          max-height: none;
+        }
+
+        #player iframe {
+          width: 100% !important;
+          height: auto !important;
+        }
+      }
+
       .playparts {
         padding: 10px;
         cursor: pointer;
@@ -45,8 +88,10 @@
       <button id="shuffleButton">シャッフル</button>
     </div>
 
-    <div id="player"></div>
-    <div id="playlist"></div>
+    <div id="content">
+      <div id="player"></div>
+      <div id="playlist"></div>
+    </div>
 
     <script>
       // 動画リスト
@@ -204,6 +249,8 @@
 
       return { videoId, startSeconds };
       }
+
+      
     </script>
   </body>
 </html>
