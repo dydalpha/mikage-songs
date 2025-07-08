@@ -206,21 +206,27 @@
       var isReady = false;
       var nowPlaying = 0;
       var isNextVideo = false;
+
       function onPlayerReady(event) {
         player.cueVideoById(playList[nowPlaying]);
-        document.getElementById("song"+nowPlaying).style.color = 'red';
+        document.getElementById("song" + nowPlaying).style.color = 'red';
+        document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
         isReady = true;
       }
 
       // プレイヤーの状態が変化した時の処理（次の動画へ進む）
       function onPlayerStateChange(event) {
         if (event.data == YT.PlayerState.ENDED && !isNextVideo) {
-          document.getElementById("song"+nowPlaying).style.color = 'white';
+          document.getElementById("song" + nowPlaying).style.color = 'white';
           nowPlaying += 1;
           if (playList.length <= nowPlaying) nowPlaying = 0;
           isNextVideo = true;
-          player.loadVideoById(playList[nowPlaying]);
-          document.getElementById("song"+nowPlaying).style.color = 'red';
+
+          player.loadVideoById(playList[nowPlaying]); // ← ここで読み込み
+          player.playVideo(); // ← これを追加して自動再生を試みる（スマホで効くかどうかはブラウザ次第）
+
+          document.getElementById("song" + nowPlaying).style.color = 'red';
+          document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else if (event.data == YT.PlayerState.PLAYING && isNextVideo) {
           isNextVideo = false;
         }
@@ -259,9 +265,11 @@
       // シャッフルボタンのクリックイベント
       document.getElementById("shuffleButton").addEventListener("click", function() {
         shuffleArray(playList);  // playListをシャッフル
+        nowPlaying = 0; // ← 1番目の曲から再生
         showList();  // シャッフル後のリストを再描画
         player.cueVideoById(playList[nowPlaying]);
         document.getElementById("song" + nowPlaying).style.color = 'red';
+        document.getElementById("playlist").scrollTop = 0;
       });
 
       document.getElementById("dedupButton").addEventListener("click", function () {
@@ -272,6 +280,7 @@
         showList();
         player.cueVideoById(playList[nowPlaying]);
         document.getElementById("song" + nowPlaying).style.color = 'red';
+        document.getElementById("playlist").scrollTop = 0;
       });
 
       document.getElementById("resetButton").addEventListener("click", function () {
@@ -280,6 +289,7 @@
         showList();
         player.cueVideoById(playList[nowPlaying]);
         document.getElementById("song" + nowPlaying).style.color = 'red';
+        document.getElementById("playlist").scrollTop = 0;
       });
 
       document.getElementById("dedupShuffleButton").addEventListener("click", function () {
@@ -290,15 +300,17 @@
         showList();
         player.cueVideoById(playList[nowPlaying]);
         document.getElementById("song" + nowPlaying).style.color = 'red';
+        document.getElementById("playlist").scrollTop = 0;
       });
       
       // リストをクリックされた時の処理
       function pushList (id) {
         if (!isReady) return;
-        document.getElementById("song"+nowPlaying).style.color = 'white';
+        document.getElementById("song" + nowPlaying).style.color = 'white';
         nowPlaying = Number(id);
         player.loadVideoById(playList[nowPlaying]);
-        document.getElementById("song"+nowPlaying).style.color = 'red';
+        document.getElementById("song" + nowPlaying).style.color = 'red';
+        document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
 
       // YouTubeのURLから videoId と startSeconds を抽出する関数
