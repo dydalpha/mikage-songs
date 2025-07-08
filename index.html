@@ -69,9 +69,23 @@
 
         #playlist {
           width: 100%;
-          max-width: 640px; /* 最大幅を制限（大きくなりすぎ防止） */
-          max-height: calc(100vh - 56.25vw);
+          max-width: 640px;
+          /* 動画と同じ縦横比で表示されたプレイヤーの高さを考慮 */
+          max-height: calc(100vh - (100vw * 9 / 16) - 80px); /* 80px はボタンやマージンの予備 */
           overflow-y: auto;
+          font-size: 14px; /* スマホ用に文字を少し小さくする */
+        }
+
+        .playparts {
+          padding: 6px; /* スマホ向けにコンパクトに */
+        }
+
+        .songtitle {
+          font-size: 14px;
+        }
+
+        .artist, .time {
+          font-size: 12px;
         }
       }
 
