@@ -30,7 +30,8 @@
 
       /* プレイヤー部分 */
       #player {
-        flex-shrink: 0;
+        width: 640px;
+        height: 360px;
       }
 
       /* プレイリスト部分 */
@@ -51,6 +52,14 @@
           padding: 10px;
         }
 
+        #player {
+          width: 100%;
+          max-width: 100%;
+          aspect-ratio: 16 / 9;
+          height: auto;
+        }
+
+        /* iframe にも適用するため、iframeがあれば中の要素にも適応 */
         #player iframe {
           width: 100% !important;
           height: auto !important;
