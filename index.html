@@ -22,26 +22,26 @@
       #content {
         display: flex;
         flex-direction: row;
-        align-items: flex-start;
-        justify-content: center; /* ←中央寄せ！ */
+        justify-content: center;
         gap: 20px;
         padding: 20px;
+        max-width: 100%;
+        box-sizing: border-box;
       }
 
-      /* プレイヤー部分 */
+      /* PC画面で埋め込み動画とプレイリストの幅を割合指定 */
       #player {
-        width: 640px;
-        height: 360px;
+        flex: 0 1 60%; /* 最大で60%、縮小可能 */
+        max-width: 640px;
+        box-sizing: border-box;
       }
 
-      /* プレイリスト部分 */
       #playlist {
-        background-color: black;
-        color: #aaaaaa;
-        width: 300px;
+        flex: 0 1 35%; /* 最大で35%、縮小可能 */
+        max-width: 400px;
+        box-sizing: border-box;
         max-height: 360px;
         overflow-y: auto;
-        padding: 10px;
       }
 
       /* スマホ対応（768px以下） */
@@ -103,18 +103,35 @@
       #header {
         background-color: #333;
         color: white;
-        padding: 10px;
+        display: flex;
+        flex-wrap: nowrap;      /* 改行禁止 */
+        overflow-x: auto;       /* 必要に応じて横スクロールもOK */
+        justify-content: center; /* 真ん中寄せ */
+        padding: 5px;
+        gap: 6px;
         text-align: center;
       }
       /* 共通ボタンスタイル */
       #header button {
         background-color: #444;
         border: none;
-        padding: 10px 20px;
         color: white;
         cursor: pointer;
         margin-right: 8px;
-        font-size: 16px;
+        flex: 1 1 auto;         /* 幅を自動調整 */
+        min-width: 80px;        /* ボタンの最低幅を指定 */
+        padding: 6px 8px;
+        font-size: 14px;
+        white-space: nowrap;    /* ボタン内テキスト改行禁止 */
+        box-sizing: border-box;
+      }
+
+      @media (max-width: 480px) {
+        #header button {
+          font-size: 12px;
+          min-width: 60px;
+          padding: 4px 6px;
+        }
       }
       #header button:hover {
         background-color: #666;
