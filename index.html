@@ -465,13 +465,15 @@
       adjustContentPadding();
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      setupTabButtons();
-      handleResize();
+    window.addEventListener('DOMContentLoaded', async () => {
+  await fetchCSVData();
+  renderFrameList();
+  showList();
+  setupTabButtons();
+  handleResize();
+  syncFrameListHeight();
+});
 
-      // iframeの読み込み遅延を考慮し少し遅れて再調整
-      setTimeout(handleResize, 200);
-    });
 
     window.addEventListener('resize', () => {
       handleResize();
@@ -588,26 +590,27 @@
       var originalPlayList = []; // 元の順番を保存しておく変数
 
       window.onYouTubeIframeAPIReady = async function () {
-        const { playList: pList, frameList: fList } = await fetchCSVData();
+  const { playList: pList, frameList: fList } = await fetchCSVData();
 
-        playList = pList;
-        originalPlayList = JSON.parse(JSON.stringify(pList));
-        frameList = fList; // ← ここで取得した frameList を使う
+  playList = pList;
+  originalPlayList = JSON.parse(JSON.stringify(pList));
+  frameList = fList;
 
-        renderFrameList(); // ★ 歌枠一覧の描画
-        showList();
+  renderFrameList(); // 歌枠一覧描画
+  showList();       // プレイリスト描画
 
-        player = new YT.Player('player', {
-          height: '360',
-          width: '640',
-          events: {
-            'onReady': onPlayerReady,
-            'onStateChange': onPlayerStateChange
-          }
-        });
-      
+  copyContentToMobile(); // ←ここでコピー
 
-      };
+  player = new YT.Player('player', {
+    height: '360',
+    width: '640',
+    events: {
+      'onReady': onPlayerReady,
+      'onStateChange': onPlayerStateChange
+    }
+  });
+};
+
 
 
 
@@ -911,18 +914,20 @@ function handleResize() {
   const playlist = document.getElementById('playlist');
 
   if (window.innerWidth <= 1080) {
-    copyContentToMobile();
     tabContainer.style.display = 'block';
     frameListWrapper.style.display = 'none';
     playlist.style.display = 'none';
+
+    copyContentToMobile(); // ここでも中身を更新
   } else {
     tabContainer.style.display = 'none';
     frameListWrapper.style.display = 'flex';
     playlist.style.display = 'block';
   }
 
-  adjustContentPadding(); // ←★ ここを追加！
+  adjustContentPadding();
 }
+
 
 
 
