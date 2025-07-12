@@ -413,6 +413,30 @@
     height: 100%;
     overflow-x: hidden;
   }
+  .playlistPage {
+    display: none;
+  }
+  .playlistPage.active {
+    display: block;
+  }
+
+  .frameListPage {
+    display: none;
+  }
+  .frameListPage.active {
+    display: block;
+  }
+
+  #playlistTabs button.active,
+  #frameListTabs button.active {
+    background-color: #444;
+    color: white;
+  }
+
+  .selected-frame {
+    color: red;
+    font-weight: bold;
+  }
 
   </style>
 
@@ -468,10 +492,11 @@
     window.addEventListener('DOMContentLoaded', async () => {
   await fetchCSVData();
   renderFrameList();
-  showList();
+  renderPlaylistWithTabs();
   setupTabButtons();
   handleResize();
   syncFrameListHeight();
+  copyContentToMobile()
 });
 
 
@@ -488,14 +513,6 @@
     
 
 
-    <!-- ヘッダーにボタン -->
-<div id="header">
-  <button id="resetButton">元に戻す</button>
-  <button id="shuffleButton">シャッフル</button>
-  <button id="dedupButton">被りなし</button>
-  <button id="dedupShuffleButton">被りなしシャッフル</button>
-</div>
-
 <div id="content">
   <div id="topRow">
     <div id="playerContainer">
@@ -510,6 +527,29 @@
       <div id="playerFooter">
         <a id="youtubeLink" href="#" target="_blank" rel="noopener noreferrer">▶ YouTubeで見る</a>
       </div>
+      <div id="playerButtons" class="navButtons" style="margin-top: 12px; text-align: center;">
+        <button id="resetButton">元に戻す</button>
+        <button id="shuffleButton">シャッフル</button>
+        <button id="dedupButton">被りなし</button>
+        <button id="dedupShuffleButton">被りなしシャッフル</button>
+      </div>
+<div id="searchContainer" style="margin-top: 12px; text-align: center;">
+  <input
+    type="text"
+    id="searchInput"
+    placeholder="曲名またはアーティスト名で検索"
+    style="width: 80%; max-width: 320px; padding: 6px 10px; font-size: 14px; border-radius: 4px 0 0 4px; border: 1px solid #444; background-color: #222; color: white;"
+  />
+  <button
+    id="searchButton"
+    style="padding: 6px 12px; font-size: 14px; border-radius: 0 4px 4px 0; border: 1px solid #444; border-left: none; background-color: #333; color: white; cursor: pointer;"
+    title="検索"
+  >
+    🔍
+  </button>
+</div>
+
+
     </div>
 
     <div id="frameListWrapper">
@@ -519,7 +559,12 @@
     </div>
   </div>
 
-  <div id="playlist"></div>
+  <div id="playlist">
+    <div id="playlistWrapper">
+  <div id="playlistTabs"></div>
+  <div id="playlistPages"></div>
+</div>
+  </div>
 
   <!-- モバイル用タブUI（デフォルトは非表示） -->
 <div id="tabContainer" style="display:none;">
@@ -529,14 +574,20 @@
   </div>
   <div id="tabContents">
     <div id="frameListMobile" class="tabContent active">
-      <ul id="frameListMobileList"></ul>
-    </div>
+  <div id="frameListMobilePaginationTop"></div> <!-- ← 上部にも追加 -->
+  <ul id="frameListMobileList"></ul>
+  <div id="frameListMobilePagination"></div> <!-- ← 既存の下部 -->
+</div>
+
     <div id="playlistMobile" class="tabContent">
-      <div id="playlistMobileContent"></div>
-    </div>
+  <div id="playlistMobilePaginationTop"></div> <!-- 🔼 上に追加 -->
+  <div id="playlistMobileContent"></div>        <!-- 曲リスト本体 -->
+  <div id="playlistMobilePagination"></div>     <!-- 🔽 既存または追加 -->
+</div>
+
   </div>
 </div>
-</div>
+
 
 
 
@@ -557,18 +608,20 @@
 
   // ★ プレイリスト作成処理はそのままでOK
   const playList = rows.slice(2).map(row => {
-    const videoUrl = row[4];
-    if (!videoUrl) return null;
-    const { videoId, startSeconds } = parseYouTubeUrl(videoUrl);
-    if (!videoId || row[6] === '埋め込み不可') return null;
+  const videoUrl = row[4];
+  if (!videoUrl) return null;
+  const { videoId, startSeconds } = parseYouTubeUrl(videoUrl);
+ if (!videoId || row[6] === '埋め込み不可' || row[6] === '非公開') return null;
 
-    const duration = parseInt(row[5], 10);
-    const title = row[2];
-    const artist = row[3];
-    const endSeconds = startSeconds + duration;
+  const duration = parseInt(row[5], 10);
+  const title = row[2];
+  const artist = row[3];
+  const endSeconds = startSeconds + duration;
+  const frameName = row[12]?.trim();  // ← ここで枠名を取得（M列）
 
-    return { videoId, startSeconds, endSeconds, title, artist };
-  }).filter(item => item !== null);
+  return { videoId, startSeconds, endSeconds, title, artist, frameName };
+}).filter(item => item !== null);
+
 
   return { playList, frameList };
 }
@@ -597,7 +650,7 @@
   frameList = fList;
 
   renderFrameList(); // 歌枠一覧描画
-  showList();       // プレイリスト描画
+  renderPlaylistWithTabs();       // プレイリスト描画
 
   copyContentToMobile(); // ←ここでコピー
 
@@ -645,25 +698,6 @@
       }
 
 
-      // リストの表示
-      function showList() {
-        var parent = document.getElementById("playlist");
-        parent.innerHTML = ''; // 既存のリストをクリア
-        for (let i = 0; i < playList.length; i++) {
-          var min = Math.floor((playList[i].endSeconds - playList[i].startSeconds) / 60);
-          var sec = ('00' + (playList[i].endSeconds - playList[i].startSeconds) % 60).slice(-2);
-          var parts = document.createElement("div");
-          parent.appendChild(parts);
-          var html = '<p><span class="songtitle" id="song' + i + '">';
-          html += playList[i].title;
-          html += '</span><span class="time">（' + min + ':' + sec + '）</span></p><p class="artist">';
-          html += playList[i].artist;
-          html += '</p>';
-          parts.innerHTML += html;
-          parts.classList.add("playparts");
-          parts.addEventListener("click", () => { pushList(i + ""); }, false);
-        }
-      }
       // 配列をランダムに並び替える関数
       function shuffleArray(array) {
         for (let i = array.length - 1; i > 0; i--) {
@@ -672,37 +706,44 @@
         }
       }
 
-      // 初期表示時に通常の順番でリストを表示
-      showList();
+      // 初期表示時
+renderPlaylistWithTabs();
+renderMobilePlaylist();
 
-      // シャッフルボタンのクリックイベント
-      document.getElementById("shuffleButton").addEventListener("click", function() {
-        shuffleArray(playList);  // playListをシャッフル
-        nowPlaying = 0; // ← 1番目の曲から再生
-        showList();  // シャッフル後のリストを再描画
-        player.cueVideoById(playList[nowPlaying]);
-        document.getElementById("song" + nowPlaying).style.color = 'red';
-        document.getElementById("playlist").scrollTop = 0;
-      });
+// シャッフル後
+document.getElementById("shuffleButton").addEventListener("click", () => {
+  shuffleArray(playList);
+  nowPlaying = 0;
+  renderPlaylistWithTabs();
+  renderMobilePlaylist();
+  player.cueVideoById(playList[nowPlaying]);
+  document.getElementById("song" + nowPlaying).style.color = 'red';
+});
+
+
 
       document.getElementById("dedupButton").addEventListener("click", function () {
         // 元の順番のリストから被り除去
         const deduped = removeDuplicatesFromPlaylist(originalPlayList);
         playList = deduped;
         nowPlaying = 0;
-        showList();
+        renderPlaylistWithTabs();
+  renderMobilePlaylist();
         player.cueVideoById(playList[nowPlaying]);
         document.getElementById("song" + nowPlaying).style.color = 'red';
         document.getElementById("playlist").scrollTop = 0;
+        copyContentToMobile()
       });
 
       document.getElementById("resetButton").addEventListener("click", function () {
         playList = JSON.parse(JSON.stringify(originalPlayList)); // 元の順番に戻す
         nowPlaying = 0;
-        showList();
+        renderPlaylistWithTabs();
+  renderMobilePlaylist();
         player.cueVideoById(playList[nowPlaying]);
         document.getElementById("song" + nowPlaying).style.color = 'red';
         document.getElementById("playlist").scrollTop = 0;
+        copyContentToMobile()
       });
 
       document.getElementById("dedupShuffleButton").addEventListener("click", function () {
@@ -710,10 +751,12 @@
         shuffleArray(deduped);
         playList = deduped;
         nowPlaying = 0;
-        showList();
+        renderPlaylistWithTabs();
+  renderMobilePlaylist();
         player.cueVideoById(playList[nowPlaying]);
         document.getElementById("song" + nowPlaying).style.color = 'red';
         document.getElementById("playlist").scrollTop = 0;
+        copyContentToMobile()
       });
 
       document.getElementById("prevBtn").addEventListener("click", function () {
@@ -724,6 +767,7 @@
         document.getElementById("song" + nowPlaying).style.color = 'red';
         document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
         updateYouTubeLink();
+        copyContentToMobile()
       });
 
       document.getElementById("nextBtn").addEventListener("click", function () {
@@ -734,6 +778,7 @@
         document.getElementById("song" + nowPlaying).style.color = 'red';
         document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
         updateYouTubeLink();
+        copyContentToMobile()
       });
 
       
@@ -815,15 +860,54 @@
     ul.style.margin = "0";
 
     const pageItems = frameList.slice(i * pageSize, (i + 1) * pageSize);
-    pageItems.forEach((frame) => {
+    pageItems.forEach((frame, index) => {
       const li = document.createElement("li");
       li.textContent = `${frame.date} - ${frame.frameName}`;
       li.style.padding = "6px 4px";
       li.style.borderBottom = "1px solid #333";
       li.style.cursor = "pointer";
+
+      // グレーアウト処理（埋め込み不可 or 非公開）
+      if (!frame.isEmbeddable || !frame.videoId) {
+        li.style.color = "#888";
+      }
+
       li.addEventListener("click", () => {
-        alert(`歌枠: ${frame.frameName}\n日付: ${frame.date}\nVideo ID: ${frame.videoId}`);
+        const clickedVideoId = frame.videoId;
+
+        // videoIdなし（非公開など）は何もしない
+        if (!clickedVideoId) return;
+
+        // 埋め込み不可ならYouTubeページを新タブで開く
+        if (!frame.isEmbeddable) {
+          window.open(`https://www.youtube.com/watch?v=${clickedVideoId}`, "_blank");
+          return;
+        }
+
+        // 選択中の色リセット＆セット
+        document.querySelectorAll("#frameListPages li").forEach(el => el.classList.remove("selected-frame"));
+        li.classList.add("selected-frame");
+
+        // プレイリストを絞り込み
+        const filteredList = originalPlayList.filter(video => video.videoId === clickedVideoId);
+
+        if (filteredList.length === 0) return;
+
+        playList = filteredList;
+        nowPlaying = 0;
+
+        renderPlaylistWithTabs();
+        renderMobilePlaylist();
+
+        if (isReady) {
+          player.loadVideoById(playList[nowPlaying].videoId, playList[nowPlaying].startSeconds);
+          updatePlayingHighlight();
+          updateYouTubeLink();
+        }
+
+        copyContentToMobile();
       });
+
       ul.appendChild(li);
     });
 
@@ -835,38 +919,64 @@
 
 
 
-      function extractFrameList(rows) {
-        const dataRows = rows.slice(2);
+     function extractFrameList(rows) {
+  const dataRows = rows.slice(2);
 
-        // 枠一覧（L: 日付, M: 枠名）
-        const frameSet = new Map();
+  // 枠一覧（L: 日付, M: 枠名）
+  const frameSet = new Map();
 
-        dataRows.forEach(row => {
-          const date = row[11]?.trim();     // L列 (インデックス11)
-          const frameName = row[12]?.trim(); // M列 (インデックス12)
-          if (date && frameName && !frameSet.has(frameName)) {
-            frameSet.set(frameName, { date, frameName });
-          }
-        });
+  dataRows.forEach(row => {
+    const date = row[11]?.trim();     // L列 (インデックス11)
+    const frameName = row[12]?.trim(); // M列 (インデックス12)
+    if (date && frameName && !frameSet.has(frameName)) {
+      frameSet.set(frameName, { date, frameName });
+    }
+  });
 
-        // 枠名から対応する最初のvideoIdを取得（O: 枠名, E: URL）
-        // O列が枠名で、E列（インデックス4）が動画URLなので、それを使う
-        const frameList = Array.from(frameSet.values()).map(frame => {
-          // 対応する最初の動画行を検索
-          const matchedRow = dataRows.find(r => r[14]?.trim() === frame.frameName); // O列は14列目なので index=14
-          let videoId = null;
-          if (matchedRow) {
-            const url = matchedRow[4]; // E列(インデックス4)に動画URL
-            if (url) {
-              const parsed = parseYouTubeUrl(url);
-              videoId = parsed.videoId;
-            }
-          }
-          return { ...frame, videoId };
-        });
+  // O列が空白でない行のインデックス取得
+  const nonEmptyOColumnIndices = dataRows
+    .map((row, index) => ({ index, value: row[14]?.trim() })) // O列は14
+    .filter(item => item.value !== '')
+    .map(item => item.index);
 
-        return frameList;
-      }
+  // O列空白でない行のE列URLから動画情報を取得
+  const videos = nonEmptyOColumnIndices.map(i => {
+    const url = dataRows[i][4]; // E列(4)
+    if (!url) return null;
+
+    const { videoId, startSeconds } = parseYouTubeUrl(url);
+    const embedStatus = dataRows[i][6]?.trim(); // G列(6)
+    const isEmbeddable = embedStatus !== '埋め込み不可' && embedStatus !== '非公開';
+
+    return {
+      rowIndex: i,
+      videoId,
+      startSeconds,
+      frameName: dataRows[i][14]?.trim(),
+      isEmbeddable
+    };
+  }).filter(v => v !== null);
+
+  // frameSet（L/M列）を上から順に videos にマッピング
+  const frameList = Array.from(frameSet.values()).map((frame, index) => {
+    const video = videos[index];
+    return {
+      ...frame,
+      videoId: video ? video.videoId : null,
+      startSeconds: video ? video.startSeconds : 0,
+      isEmbeddable: video ? video.isEmbeddable : false
+    };
+  });
+
+  return frameList;
+}
+
+
+
+
+
+
+
 
 
    // タブ切り替えのイベント設定
@@ -899,12 +1009,40 @@ function copyContentToMobile() {
   const playlistMobileContent = document.getElementById('playlistMobileContent');
 
   if (frameListPages && frameListMobileList) {
-    frameListMobileList.innerHTML = frameListPages.innerHTML;
-  }
+  frameListMobileList.innerHTML = '';
+  const pages = frameListPages.querySelectorAll('.frameListPage');
+
+  pages.forEach(page => {
+    const items = page.querySelectorAll('li');
+    items.forEach(li => {
+      const clone = li.cloneNode(true);
+      clone.addEventListener("click", () => {
+        alert(clone.textContent);
+      });
+      frameListMobileList.appendChild(clone);
+    });
+  });
+}
+
 
   if (playlist && playlistMobileContent) {
-    playlistMobileContent.innerHTML = playlist.innerHTML;
-  }
+  playlistMobileContent.innerHTML = '';
+  const items = playlist.querySelectorAll('.playparts');
+  items.forEach((item, index) => {
+    const clone = item.cloneNode(true);
+    clone.addEventListener("click", () => {
+      if (!isReady) return;
+      document.getElementById("song" + nowPlaying).style.color = 'white';
+      nowPlaying = index;
+      player.loadVideoById(playList[nowPlaying]);
+      document.getElementById("song" + nowPlaying).style.color = 'red';
+      document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      updateYouTubeLink();
+    });
+    playlistMobileContent.appendChild(clone);
+  });
+}
+
 }
 
 // 表示切替（レスポンシブ対応）
@@ -914,11 +1052,15 @@ function handleResize() {
   const playlist = document.getElementById('playlist');
 
   if (window.innerWidth <= 1080) {
-    tabContainer.style.display = 'block';
-    frameListWrapper.style.display = 'none';
-    playlist.style.display = 'none';
+  tabContainer.style.display = 'block';
+  frameListWrapper.style.display = 'none';
+  playlist.style.display = 'none';
 
-    copyContentToMobile(); // ここでも中身を更新
+  renderMobileFrameList(frameList); // ★ここで10件ずつ表示
+  renderMobilePlaylist();
+  copyContentToMobilePlaylist();    // ★歌枠以外の部分も分けて処理
+
+
   } else {
     tabContainer.style.display = 'none';
     frameListWrapper.style.display = 'flex';
@@ -955,6 +1097,321 @@ window.addEventListener('resize', () => {
   handleResize();
   syncFrameListHeight();
 });
+
+function renderMobileFrameList(frameList) {
+  const pageSize = 10;
+  const listContainer = document.getElementById("frameListMobileList");
+  const paginationTop = document.getElementById("frameListMobilePaginationTop");
+  const paginationBottom = document.getElementById("frameListMobilePagination");
+
+  let currentPage = 0;
+
+  function renderPage(pageIndex) {
+    listContainer.innerHTML = "";
+    const start = pageIndex * pageSize;
+    const end = start + pageSize;
+    const pageItems = frameList.slice(start, end);
+
+    pageItems.forEach((frame, i) => {
+      const li = document.createElement("li");
+      li.textContent = `${frame.date} - ${frame.frameName}`;
+      li.style.padding = "6px 4px";
+      li.style.borderBottom = "1px solid #333";
+      li.style.cursor = "pointer";
+
+      // グレーアウト処理
+      if (!frame.isEmbeddable || !frame.videoId) {
+        li.style.color = "#888";
+      }
+
+      li.addEventListener("click", () => {
+        const clickedVideoId = frame.videoId;
+
+        // 非公開・未取得など videoId がない場合は何もしない
+        if (!clickedVideoId) return;
+
+        // 埋め込み不可のときは YouTube に飛ばす
+        if (!frame.isEmbeddable) {
+          window.open(`https://www.youtube.com/watch?v=${clickedVideoId}`, "_blank");
+          return;
+        }
+
+        // 色変更（選択状態の強調）
+        document.querySelectorAll("#frameListMobileList li").forEach(el => el.classList.remove("selected-frame"));
+        li.classList.add("selected-frame");
+
+        // プレイリストをフィルタ
+        const filteredList = originalPlayList.filter(video => video.videoId === clickedVideoId);
+
+        if (filteredList.length === 0) return;
+
+        playList = filteredList;
+        nowPlaying = 0;
+
+        renderPlaylistWithTabs();
+        renderMobilePlaylist();
+
+        if (isReady) {
+          player.loadVideoById(playList[nowPlaying].videoId, playList[nowPlaying].startSeconds);
+          updatePlayingHighlight();
+          updateYouTubeLink();
+        }
+
+        copyContentToMobile();
+      });
+
+      listContainer.appendChild(li);
+    });
+
+    renderPaginationButtons(); // 再描画
+  }
+
+  function renderPaginationButtons() {
+    paginationTop.innerHTML = "";
+    paginationBottom.innerHTML = "";
+    const totalPages = Math.ceil(frameList.length / pageSize);
+
+    for (let i = 0; i < totalPages; i++) {
+      const topBtn = document.createElement("button");
+      const bottomBtn = document.createElement("button");
+      topBtn.textContent = bottomBtn.textContent = i + 1;
+
+      if (i === currentPage) {
+        topBtn.classList.add("active");
+        bottomBtn.classList.add("active");
+      }
+
+      topBtn.addEventListener("click", () => {
+        currentPage = i;
+        renderPage(currentPage);
+      });
+
+      bottomBtn.addEventListener("click", () => {
+        currentPage = i;
+        renderPage(currentPage);
+      });
+
+      paginationTop.appendChild(topBtn);
+      paginationBottom.appendChild(bottomBtn);
+    }
+  }
+
+  renderPage(currentPage);
+}
+
+
+
+function copyContentToMobilePlaylist() {
+  const playlist = document.getElementById('playlist');
+  const playlistMobileContent = document.getElementById('playlistMobileContent');
+
+  if (playlist && playlistMobileContent) {
+    playlistMobileContent.innerHTML = '';
+    const items = playlist.querySelectorAll('.playparts');
+    items.forEach((item, index) => {
+      const clone = item.cloneNode(true);
+      clone.addEventListener("click", () => {
+        if (!isReady) return;
+        document.getElementById("song" + nowPlaying).style.color = 'white';
+        nowPlaying = index;
+        player.loadVideoById(playList[nowPlaying]);
+        document.getElementById("song" + nowPlaying).style.color = 'red';
+        document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
+        updateYouTubeLink();
+      });
+      playlistMobileContent.appendChild(clone);
+    });
+  }
+}
+
+function renderMobilePlaylist() {
+  const topPagination = document.getElementById('playlistMobilePaginationTop');
+  const bottomPagination = document.getElementById('playlistMobilePagination');
+  const contentContainer = document.getElementById('playlistMobileContent');
+
+  const pageSize = 20;
+  const totalPages = Math.ceil(playList.length / pageSize);
+  let currentPage = 0;
+
+  function renderPage(pageIndex) {
+    contentContainer.innerHTML = "";
+    const start = pageIndex * pageSize;
+    const end = start + pageSize;
+
+    const items = playList.slice(start, end);
+    items.forEach((item, index) => {
+      const globalIndex = start + index;
+      const div = document.createElement("div");
+      div.classList.add("playparts");
+
+      div.innerHTML = `
+        <p>
+          <span class="songtitle">${item.title}</span>
+          <span class="time">（${Math.floor((item.endSeconds - item.startSeconds) / 60)}:${String((item.endSeconds - item.startSeconds) % 60).padStart(2, '0')}）</span>
+        </p>
+        <p class="artist">${item.artist}</p>
+      `;
+
+      div.addEventListener("click", () => {
+        if (!isReady) return;
+        document.getElementById("song" + nowPlaying).style.color = 'white';
+        nowPlaying = globalIndex;
+        player.loadVideoById(playList[nowPlaying]);
+        document.getElementById("song" + nowPlaying).style.color = 'red';
+        document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
+        updateYouTubeLink();
+      });
+
+      contentContainer.appendChild(div);
+    });
+
+    renderPaginationButtons(pageIndex);
+  }
+
+  function renderPaginationButtons(activeIndex) {
+    const makeButtons = (container) => {
+      container.innerHTML = "";
+      for (let i = 0; i < totalPages; i++) {
+        const btn = document.createElement("button");
+        btn.textContent = i + 1;
+        if (i === activeIndex) btn.classList.add("active");
+
+        btn.addEventListener("click", () => {
+          currentPage = i;
+          renderPage(i);
+        });
+
+        container.appendChild(btn);
+      }
+    };
+
+    makeButtons(topPagination);
+    makeButtons(bottomPagination);
+  }
+
+  renderPage(currentPage);
+}
+
+
+function renderPlaylistWithTabs() {
+  const tabsContainer = document.getElementById("playlistTabs");
+  const pagesContainer = document.getElementById("playlistPages");
+
+  tabsContainer.innerHTML = "";
+  pagesContainer.innerHTML = "";
+
+  const pageSize = 20;
+  const totalPages = Math.ceil(playList.length / pageSize);
+
+  for (let i = 0; i < totalPages; i++) {
+    // タブボタン（PC用）
+    const tabBtn = document.createElement("button");
+    tabBtn.textContent = i + 1;
+    if (i === 0) tabBtn.classList.add("active");
+
+    tabBtn.addEventListener("click", () => {
+      document.querySelectorAll(".playlistPage").forEach(p => p.classList.remove("active"));
+      document.querySelectorAll("#playlistTabs button").forEach(b => b.classList.remove("active"));
+      document.getElementById(`playlistPage${i}`).classList.add("active");
+      tabBtn.classList.add("active");
+    });
+
+    tabsContainer.appendChild(tabBtn);
+
+    // ページ本体
+    const page = document.createElement("div");
+    page.classList.add("playlistPage");
+    if (i === 0) page.classList.add("active");
+    page.id = `playlistPage${i}`;
+
+    const start = i * pageSize;
+    const end = start + pageSize;
+    const items = playList.slice(start, end);
+
+    items.forEach((item, index) => {
+      const globalIndex = start + index;
+      const div = document.createElement("div");
+      div.classList.add("playparts");
+
+      div.innerHTML = `
+        <p>
+          <span class="songtitle" id="song${globalIndex}">${item.title}</span>
+          <span class="time">（${Math.floor((item.endSeconds - item.startSeconds) / 60)}:${String((item.endSeconds - item.startSeconds) % 60).padStart(2, '0')}）</span>
+        </p>
+        <p class="artist">${item.artist}</p>
+      `;
+
+      div.addEventListener("click", () => {
+        if (!isReady) return;
+        document.getElementById("song" + nowPlaying).style.color = 'white';
+        nowPlaying = globalIndex;
+        player.loadVideoById(playList[nowPlaying]);
+        document.getElementById("song" + nowPlaying).style.color = 'red';
+        document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
+        updateYouTubeLink();
+      });
+
+      page.appendChild(div);
+    });
+
+    pagesContainer.appendChild(page);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const searchInput = document.getElementById('searchInput');
+  const searchButton = document.getElementById('searchButton');
+
+  searchButton.addEventListener('click', () => {
+    const keyword = searchInput.value.trim().toLowerCase();
+    if (!keyword) return;
+
+    const filtered = originalPlayList.filter(item => {
+      const title = item.title?.toLowerCase() || '';
+      const artist = item.artist?.toLowerCase() || '';
+      return title.includes(keyword) || artist.includes(keyword);
+    });
+
+    playList = filtered;
+    nowPlaying = 0;
+
+    renderPlaylistWithTabs();
+    renderMobilePlaylist();
+
+    if (playList.length > 0 && isReady) {
+      player.loadVideoById(playList[nowPlaying].videoId, playList[nowPlaying].startSeconds);
+      updatePlayingHighlight();
+      updateYouTubeLink();
+    } else {
+      // 検索結果が0件だった場合
+      document.getElementById('playlistPages').innerHTML = '<p style="padding: 12px;">該当する曲がありません。</p>';
+      document.getElementById('playlistMobileContent').innerHTML = '<p style="padding: 12px;">該当する曲がありません。</p>';
+    }
+  });
+});
+
+
+// フィルター関数は先ほどのままでOK
+function filterPlaylist(keyword) {
+  const playlistPages = document.getElementById('playlistPages');
+  if (!playlistPages) return;
+
+  const songs = playlistPages.querySelectorAll('.playparts');
+  songs.forEach(song => {
+    const titleElem = song.querySelector('.songtitle');
+    const artistElem = song.querySelector('.artist');
+
+    const title = titleElem ? titleElem.textContent.toLowerCase() : '';
+    const artist = artistElem ? artistElem.textContent.toLowerCase() : '';
+
+    if (title.includes(keyword) || artist.includes(keyword)) {
+      song.style.display = '';
+    } else {
+      song.style.display = 'none';
+    }
+  });
+}
+
 
 
     </script>
