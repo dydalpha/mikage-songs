@@ -438,6 +438,10 @@
     font-weight: bold;
   }
 
+  .hidden {
+  display: none;
+}
+
   </style>
 
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
@@ -491,12 +495,14 @@
 
     window.addEventListener('DOMContentLoaded', async () => {
   await fetchCSVData();
-  renderFrameList();
-  renderPlaylistWithTabs();
-  setupTabButtons();
-  handleResize();
-  syncFrameListHeight();
-  copyContentToMobilePlaylist()
+  setTimeout(() => {
+    renderFrameList();
+    renderPlaylistWithTabs();
+    setupTabButtons();
+    handleResize();
+    syncFrameListHeight();
+    copyContentToMobilePlaylist();
+  }, 500);
 });
 
 
@@ -543,7 +549,7 @@ window.addEventListener('resize', () => {
         </div>
       </div>
       <div id="player"></div>
-      <div id="playerFooter">
+      <div id="playerFooter" class="hidden">
         <a id="youtubeLink" href="#" target="_blank" rel="noopener noreferrer">▶ YouTubeで見る</a>
       </div>
       <div id="playerButtons" class="navButtons" style="margin-top: 12px; text-align: center;">
@@ -909,7 +915,9 @@ document.getElementById("shuffleButton").addEventListener("click", () => {
 
         // 埋め込み不可ならYouTubeページを新タブで開く
         if (!frame.isEmbeddable) {
-          window.open(`https://www.youtube.com/watch?v=${clickedVideoId}`, "_blank");
+          player.loadVideoById(frame.videoId);
+  updatePlayingHighlight();
+  updateYouTubeLink();
           return;
         }
 
@@ -969,34 +977,46 @@ document.getElementById("shuffleButton").addEventListener("click", () => {
 
   // O列空白でない行のE列URLから動画情報を取得
   const videos = nonEmptyOColumnIndices.map(i => {
-    const url = dataRows[i][4]; // E列(4)
-    if (!url) return null;
+  const url = dataRows[i][4]; // E列(4)
+  if (!url) return null;
 
-    const { videoId, startSeconds } = parseYouTubeUrl(url);
-    const embedStatus = dataRows[i][6]?.trim(); // G列(6)
-    const isEmbeddable = embedStatus !== '埋め込み不可' && embedStatus !== '非公開';
+  const { videoId, startSeconds } = parseYouTubeUrl(url);
+  const embedStatus = dataRows[i][6]?.trim(); // G列(6)
+  const baseFrameName = dataRows[i][14]?.trim() || ''; // O列(14)
 
-    return {
-      rowIndex: i,
-      videoId,
-      startSeconds,
-      frameName: dataRows[i][14]?.trim(),
-      isEmbeddable
-    };
-  }).filter(v => v !== null);
+  let tag = '';
+  if (embedStatus === '非公開') {
+    tag = '[非公開]';
+  } else if (embedStatus === '埋め込み不可') {
+    tag = '[埋め込み不可]';
+  }
 
-  // frameSet（L/M列）を上から順に videos にマッピング
+  const frameName = `${baseFrameName} ${tag}`.trim();
+  const isEmbeddable = tag === '';
+
+  return {
+    rowIndex: i,
+    videoId,
+    startSeconds,
+    frameName,
+    isEmbeddable
+  };
+}).filter(v => v !== null);
+
+
   const frameList = Array.from(frameSet.values()).map((frame, index) => {
-    const video = videos[index];
-    return {
-      ...frame,
-      videoId: video ? video.videoId : null,
-      startSeconds: video ? video.startSeconds : 0,
-      isEmbeddable: video ? video.isEmbeddable : false
-    };
-  });
+  const video = videos[index];
+  return {
+    ...frame,
+    frameName: video ? video.frameName : frame.frameName,  // ★ 修正ポイント
+    videoId: video ? video.videoId : null,
+    startSeconds: video ? video.startSeconds : 0,
+    isEmbeddable: video ? video.isEmbeddable : false
+  };
+});
 
-  console.log(frameList); // frameListの内容を確認
+
+
 
   return frameList;
 }
@@ -1107,22 +1127,21 @@ function renderMobileFrameList(frameList) {
       li.style.borderBottom = "1px solid #333";
 
       // ステータスによるスタイル設定
-      if (!frame.videoId || frame.status === '非公開') {
-        li.style.color = "#888";  // 非公開・埋め込み不可はグレー
-        li.style.cursor = "default"; // クリック無効
-      } else {
-        li.style.cursor = "pointer"; // クリック可能
-        if (frame.status === '埋め込み不可') {
-          li.style.color = "#888"; // 埋め込み不可もグレーアウト
-        }
+      if (!frame.isEmbeddable || !frame.videoId) {
+        li.style.color = "#888";
       }
 
-      // クリック時の処理
       li.addEventListener("click", () => {
-        if (!frame.videoId || frame.status === '非公開') return;
+        const clickedVideoId = frame.videoId;
 
-        if (frame.status === '埋め込み不可') {
-          window.open(`https://www.youtube.com/watch?v=${frame.videoId}`, "_blank");
+        // videoIdなし（非公開など）は何もしない
+        if (!clickedVideoId) return;
+
+        // 埋め込み不可ならYouTubeページを新タブで開く
+        if (!frame.isEmbeddable) {
+          player.loadVideoById(frame.videoId);
+  updatePlayingHighlight();
+  updateYouTubeLink();
           return;
         }
 
