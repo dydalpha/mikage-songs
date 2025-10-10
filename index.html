@@ -71,6 +71,13 @@
       .grid{grid-template-columns:1fr}
       .player-bar{left:12px;transform:none;width:calc(100% - 24px)}
     }
+    @media (max-width: 480px) {
+  nav.main-nav {
+    display: flex !important;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
 
     /* utility */
     .muted{color:var(--muted)}
