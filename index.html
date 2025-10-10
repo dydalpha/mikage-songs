@@ -37,7 +37,9 @@
 
     /* grid for video cards */
     .grid {flex: 1;display: flex;overflow-x: auto;gap: 10px;scroll-snap-type: x mandatory;}
-    .card {flex: 0 0 320px;background: var(--card);border-radius: 10px;padding: 8px;scroll-snap-align: start;display: flex;flex-direction: column;justify-content: flex-start;overflow: hidden;}
+    .card {flex: 0 0 auto; /* 幅固定、横スクロール */
+  height: 85%; /* カードの高さを決定 */
+  aspect-ratio: 16 / 9; /* 幅は高さから自動計算 */background: var(--card);border-radius: 10px;padding: 8px;scroll-snap-align: start;display: flex;flex-direction: column;justify-content: flex-start;overflow: hidden;}
     .thumb{background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));height:120px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.02)}
     .meta{font-size:14px;color:var(--muted)}
     .title-small{font-weight:600}
