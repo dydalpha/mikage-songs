@@ -23,14 +23,14 @@
 
     .container{max-width:var(--max-width);margin:2px auto;padding:20px}
 
-    header.site-header{position: fixed;z-index: 1000;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;border-radius:14px;}
+    header.site-header{z-index: 1000;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;border-radius:14px;}
     .brand{display:flex;align-items:center;gap:12px}
     .brand h1{margin:0;font-size:18px;letter-spacing:0.02em}
     nav.main-nav{display:flex;gap:18px;align-items:center}
     nav a{color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:8px}
     nav a.active, nav a:hover{font-weight: bold;color:#ffffff;}
 
-    main{margin-top:60px}
+    main{margin-top:12px}
 
     section.block{height: 25vh;overflow: hidden;margin-top: 12px;padding: 10px;border-radius: 12px;background: var(--panel);display: flex;flex-direction: column;background:var(--panel)}
     .block h2{margin:0 0 12px 0;font-size:20px;color:var(--titles);}
@@ -74,7 +74,6 @@
     @media (max-width: 480px) {
   nav.main-nav {
     display: flex !important;
-    flex-direction: column;
     gap: 8px;
   }
 }
