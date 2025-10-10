@@ -1,1451 +1,344 @@
-<!DOCTYPE html>
-<html>
- <head>
+<!doctype html>
+<html lang="ja">
+<head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>深影さんの歌枠検索/再生サイト</title>
-
+  <meta name="description" content="夜空テーマの歌アーカイブ。オリジナル・カバー・紹介動画を検索・連続再生できます。" />
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: sans-serif;
-      background-color: black;
-      color: #aaaaaa;
+    /* Reset-ish */   
+    :root{
+      --background-image: url(./images/stars_bg.webp) center / cover no-repeat fixed;
+      --panel: rgba(4, 187, 243, 0.315);
+      --muted:#c6d0da;
+      --accent:#7bb6ff; /* light blue accent, could be fan-mark color */
+      --glass: rgba(255, 255, 255, 0.03);
+      --card:#291b1b;
+      --titles:#ffffff;
+      --radius:12px;
+      --max-width:1100px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+    }
+    html,body{height:100%;margin:0;background:var(--background-image);}
+
+    .container{max-width:var(--max-width);margin:2px auto;padding:20px}
+
+    header.site-header{position: fixed;z-index: 1000;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;border-radius:14px;}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand h1{margin:0;font-size:18px;letter-spacing:0.02em}
+    nav.main-nav{display:flex;gap:18px;align-items:center}
+    nav a{color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:8px}
+    nav a.active, nav a:hover{font-weight: bold;color:#ffffff;}
+
+    main{margin-top:60px}
+
+    section.block{height: 25vh;overflow: hidden;margin-top: 12px;padding: 10px;border-radius: 12px;background: var(--panel);display: flex;flex-direction: column;background:var(--panel)}
+    .block h2{margin:0 0 12px 0;font-size:20px;color:var(--titles);}
+
+    /* grid for video cards */
+    .grid {flex: 1;display: flex;overflow-x: auto;gap: 10px;scroll-snap-type: x mandatory;}
+    .card {flex: 0 0 320px;background: var(--card);border-radius: 10px;padding: 8px;scroll-snap-align: start;display: flex;flex-direction: column;justify-content: flex-start;overflow: hidden;}
+    .thumb{background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));height:120px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,0.02)}
+    .meta{font-size:14px;color:var(--muted)}
+    .title-small{font-weight:600}
+
+    .yt-player {position: relative;width: 100%;aspect-ratio: 16 / 9;border-radius: 8px;overflow: hidden;}
+    .yt-player iframe {position: absolute;top: 0;left: 0;width: 100%;height: 100%;border: none;}
+
+    /* player bar */
+    .player-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;width:calc(100% - 40px);max-width:1000px;padding:10px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));display:flex;align-items:center;gap:12px;box-shadow:0 8px 30px rgba(2,6,10,0.6)}
+    .player-thumb{width:64px;height:64px;border-radius:8px;background:rgba(255,255,255,0.02)}
+    .player-info{flex:1}
+    .player-controls{display:flex;gap:8px;align-items:center}
+    button.btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:10px;color:#fff;cursor:pointer}
+    button.btn.primary{background:var(--accent);color:#061225;border:none}
+
+    /* song list / table */
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.03);color:var(--muted)}
+    th{color:#fff}
+
+    /* responsive */
+    @media (max-width:900px){
+      .grid{grid-template-columns:repeat(2,1fr)}
+      .hero{flex-direction:column;align-items:flex-start}
+      .hero .title{font-size:34px}
+    }
+    @media (max-width:480px){
+      .container{padding:12px;margin:12px}
+      nav.main-nav{display:none}
+      header.site-header{padding:12px}
+      .grid{grid-template-columns:1fr}
+      .player-bar{left:12px;transform:none;width:calc(100% - 24px)}
     }
 
-    /* 全体コンテンツ縦並び */
-    #content {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      padding: 10px 20px;
-      align-items: center;
-      max-width: 1100px;
-      margin: 0 auto;
-      box-sizing: border-box;
-    }
-
-    /* 上段：動画と歌枠一覧の横並び */
-    #topRow {
-      display: flex;
-      gap: 20px;
-      align-items: flex-start;
-      width: 100%;
-      max-width: 1100px;
-      box-sizing: border-box;
-      justify-content: center;
-    }
-
-    /* 動画プレイヤー */
-    #playerContainer {
-      flex: 1 1 60%;
-      max-width: 640px;
-      background-color: #111;
-      padding: 10px 16px;
-      border-radius: 8px;
-      color: white;
-      text-align: center;
-      box-sizing: border-box;
-      margin: 0 auto;
-    }
-
-    #playerHeader {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 4px 0 8px 0;
-      font-size: 16px;
-      font-weight: bold;
-      border-bottom: 1px solid #333;
-    }
-
-    .navButtons button {
-      background-color: #333;
-      color: white;
-      border: none;
-      padding: 4px 10px;
-      margin-left: 6px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-
-    #playerFooter {
-      margin-top: 6px;
-    }
-
-    #playerFooter a {
-      color: #1e90ff;
-      text-decoration: none;
-      font-size: 13px;
-    }
-
-    /* 歌枠一覧 */
-    #frameListWrapper {
-      flex: 1 1 40%;
-      max-width: 400px;
-      background-color: #111;
-      color: #fff;
-      padding: 10px;
-      border-radius: 8px;
-      overflow-x: hidden;
-      box-sizing: border-box;
-      max-height: 500px;
-
-      display: flex;
-      flex-direction: column;
-    }
-
-    #frameListTitle {
-      margin-top: 0;
-      font-size: 16px;
-      padding-bottom: 4px;
-      border-bottom: 1px solid #444;
-    }
-
-    /* タブボタンも折り返すように */
-    #frameListTabs {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin: 6px 0;
-      overflow-x: hidden;
-      max-width: 100%;
-      box-sizing: border-box;
-    }
-
-    #frameListTabs button {
-      background-color: #333;
-      border: none;
-      color: white;
-      padding: 4px 8px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-
-    #frameListTabs button.active {
-      background-color: #555;
-      font-weight: bold;
-    }
-
-    #frameListPages {
-      flex: 1;
-      overflow-y: auto;
-      border-top: 1px solid #444;
-      padding-top: 6px;
-    }
-
-    .frameListPage {
-      display: none;
-    }
-
-    .frameListPage.active {
-      display: block;
-    }
-
-    #frameList {
-      list-style: none;
-      padding-left: 0;
-      margin-top: 8px;
-    }
-
-    #frameList li {
-      padding: 6px 4px;
-      border-bottom: 1px solid #333;
-      cursor: pointer;
-      color: white;
-    }
-
-    #frameList li:hover {
-      background-color: #222;
-    }
-
-    /* プレイリストは上段の下 */
-    #playlist {
-      width: 100%;
-      max-width: 1100px;
-      border-top: 1px solid #666;
-      padding-top: 10px;
-      background-color: black;
-      color: #aaaaaa;
-      max-height: 360px;
-      overflow-y: auto;
-      box-sizing: border-box;
-    }
-
-    /* 共通プレイパーツ */
-    .playparts {
-      padding: 10px;
-      cursor: pointer;
-      border-bottom: 1px solid #aaa;
-      color: white;
-    }
-
-    .playparts:last-child {
-      border-bottom: none;
-    }
-
-    .songtitle {
-      color: white;
-      font-size: 16px;
-    }
-
-    .artist,
-    .time {
-      font-size: 12px;
-      color: #aaa;
-    }
-
-    /* ヘッダー */
-    #header {
-      background-color: #333;
-      color: white;
-      display: flex;
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      justify-content: center;
-      padding: 5px;
-      gap: 6px;
-      text-align: center;
-      box-sizing: border-box;
-    }
-
-    #header button {
-      background-color: #444;
-      border: none;
-      color: white;
-      cursor: pointer;
-      margin-right: 8px;
-      flex: 1 1 auto;
-      min-width: 80px;
-      padding: 6px 8px;
-      font-size: 14px;
-      white-space: nowrap;
-      box-sizing: border-box;
-      transition: background-color 0.3s;
-    }
-
-    #header button:last-child {
-      margin-right: 0;
-    }
-
-    #header button:hover {
-      background-color: #666;
-    }
-
-    /* タブUI */
-    #tabContainer {
-  position: static; /* fixed → staticに */
-  bottom: auto;
-  left: auto;
-  right: auto;
-  z-index: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-top: 1px solid #333;
-  padding: 10px 0;
-  background-color: #000;
-  width: 100%;
-  max-width: 640px; /* 必要なら */
-  margin: 0 auto; /* 中央寄せ */
-}
-
-
-    #tabButtons {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid #444;
-  background-color: #111;
-  padding: 0 10px;
-  max-width: 640px;
-  box-sizing: border-box;
-  justify-content: center;
-  margin: 0 auto;
-}
-
-
-    #tabButtons button {
-      flex: 1;
-      padding: 8px 0;
-      background-color: #333;
-      color: white;
-      border: none;
-      border-radius: 6px 6px 0 0;
-      cursor: pointer;
-      font-size: 16px;
-    }
-
-    #tabButtons button.active {
-      background-color: #555;
-      font-weight: bold;
-    }
-
-    .tabContent {
-      background-color: #111;
-      color: #aaa;
-      padding: 10px;
-      border-radius: 0 6px 6px 6px;
-      max-height: 400px;
-      overflow-y: auto;
-      display: none;
-      width: 100%;
-      max-width: 640px;
-      box-sizing: border-box;
-    }
-
-    .tabContent.active {
-      display: block;
-    }
-
-    #frameListContainer.mobileTab,
-    #playlist.mobileTab {
-      width: 100%;
-      max-width: none;
-      box-sizing: border-box;
-      max-height: none;
-      overflow-y: auto;
-    }
-
-    /* メディアクエリ */
-
-    @media (max-width: 1080px) {
-      #frameListWrapper {
-        display: none; /* PC版リストは非表示 */
-      }
-
-      #tabContainer {
-        display: flex; /* タブUI表示 */
-        justify-content: center;
-        gap: 20px;
-      }
-
-  #tabContents {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-  }
-  
- 
-
-      #playlist {
-        max-width: 640px;
-      }
-
-      #content {
-        padding: 10px;
-        align-items: center;
-      }
-
-      #topRow {
-        flex-direction: column;
-        width: 100%;
-        max-width: 640px;
-      }
-
-      #playerContainer {
-        width: 100%;
-        max-width: 640px;
-        padding: 10px;
-      }
-
-      #header button {
-        font-size: 12px;
-        min-width: 60px;
-        padding: 4px 6px;
-      }
-
-      #playerHeader {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .navButtons {
-        margin-top: 4px;
-      }
-
-      .navButtons button {
-        padding: 4px 8px;
-        font-size: 12px;
-      }
-
-      #playerFooter a {
-        font-size: 12px;
-      }
-
-      .playparts {
-        padding: 6px;
-      }
-
-      .songtitle {
-        font-size: 14px;
-      }
-
-      .artist,
-      .time {
-        font-size: 12px;
-      }
-
-      /* iframe 高さ固定 */
-      #playerContainer iframe {
-        height: 360px !important;
-        max-height: 100%;
-        width: 100% !important;
-      }
-    }
-
-    @media (max-width: 480px) {
-      #header button {
-        font-size: 12px;
-        min-width: 60px;
-        padding: 4px 6px;
-      }
-    }
-
-    *, *::before, *::after {
-      box-sizing: border-box;
-    }
-
-    html, body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    overflow-x: hidden;
-  }
-  .playlistPage {
-    display: none;
-  }
-  .playlistPage.active {
-    display: block;
-  }
-
-  .frameListPage {
-    display: none;
-  }
-  .frameListPage.active {
-    display: block;
-  }
-
-  #playlistTabs button.active,
-  #frameListTabs button.active {
-    background-color: #444;
-    color: white;
-  }
-
-  .selected-frame {
-    color: red;
-    font-weight: bold;
-  }
-
-  .hidden {
-  display: none;
-}
-
+    /* utility */
+    .muted{color:var(--muted)}
+    .right{margin-left:auto}
+    .hidden{display:none}
   </style>
-
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
-
-  <script>
-    // タブの表示切替と初期化
-    function setupTabButtons() {
-      const tabButtons = document.querySelectorAll('#tabButtons button');
-      const tabContents = document.querySelectorAll('.tabContent');
-
-      tabButtons.forEach((button, i) => {
-        button.addEventListener('click', () => {
-          tabButtons.forEach(btn => btn.classList.remove('active'));
-          button.classList.add('active');
-
-          tabContents.forEach(content => content.classList.remove('active'));
-          if (tabContents[i]) tabContents[i].classList.add('active');
-        });
-      });
-    }
-
-    // iframeの高さをモバイルで固定（1080px以下）
-    function adjustIframeHeight() {
-      const iframe = document.querySelector("#playerContainer iframe");
-      if (!iframe) return;
-
-      if (window.innerWidth <= 1080) {
-        iframe.style.height = '360px';
-        iframe.style.width = '100%';
-      } else {
-        iframe.style.height = '';
-        iframe.style.width = '';
-      }
-    }
-
-    // content の padding-bottom をタブの高さに合わせて調整
-    function adjustContentPadding() {
-      const tab = document.querySelector('#tabContainer');
-      const content = document.querySelector('#content');
-      if (!tab || !content) return;
-
-      const tabHeight = tab.getBoundingClientRect().height;
-      content.style.paddingBottom = `${tabHeight + 20}px`; // 余裕を持たせる
-    }
-
-    // リサイズ時の処理まとめ
-    function handleResize() {
-      adjustIframeHeight();
-      adjustContentPadding();
-    }
-
-    window.addEventListener('DOMContentLoaded', async () => {
-  await fetchCSVData();
-  setTimeout(() => {
-    renderFrameList();
-    renderPlaylistWithTabs();
-    setupTabButtons();
-    handleResize();
-    syncFrameListHeight();
-    copyContentToMobilePlaylist();
-  }, 500);
-});
-
-
-    window.addEventListener('resize', () => {
-      handleResize();
-    });
-    window.addEventListener('DOMContentLoaded', async () => {
-  await fetchCSVData();
-  renderFrameList();
-  renderPlaylistWithTabs();
-
-  renderMobileFrameList(frameList);
-  renderMobilePlaylist();
-
-  setupTabButtons();
-  handleResize();
-  syncFrameListHeight();
-});
-
-window.addEventListener('resize', () => {
-  handleResize();
-  renderMobileFrameList(frameList);
-  syncFrameListHeight();
-});
-
-  </script>
 </head>
+<body>
 
+  <div class="container">
+    <header class="site-header">
 
+      <nav class="main-nav" aria-label="メインナビ">
+        <a href="#" data-view="home" class="active">トップ</a>
+        <a href="search.html" data-view="list">歌一覧</a>
+      </nav>
+    </header>
 
-  <body>
+    <main id="app">
+      <!-- Home view -->
+      <section id="view-home" class="view">
 
-    
+        <section class="block" aria-labelledby="orig-title">
+          <h2 id="orig-title">Original Songs</h2>
+          <div class="grid" id="orig-grid"></div>
+        </section>
 
+        <section class="block" aria-labelledby="cover-title">
+          <h2 id="cover-title">Cover Songs</h2>
+          <div class="grid" id="cover-grid"></div>
+        </section>
 
-<div id="content">
-  <div id="topRow">
-    <div id="playerContainer">
-      <div id="playerHeader">
-        <span>Now Playing</span>
-        <div class="navButtons">
-          <button id="prevBtn">◀</button>
-          <button id="nextBtn">▶</button>
-        </div>
-      </div>
-      <div id="player"></div>
-      <div id="playerFooter" class="hidden">
-        <a id="youtubeLink" href="#" target="_blank" rel="noopener noreferrer">▶ YouTubeで見る</a>
-      </div>
-      <div id="playerButtons" class="navButtons" style="margin-top: 12px; text-align: center;">
-        <button id="resetButton">元に戻す</button>
-        <button id="shuffleButton">シャッフル</button>
-        <button id="dedupButton">被りなし</button>
-        <button id="dedupShuffleButton">被りなしシャッフル</button>
-      </div>
-<div id="searchContainer" style="margin-top: 12px; text-align: center;">
-  <input
-    type="text"
-    id="searchInput"
-    placeholder="曲名またはアーティスト名で検索"
-    style="width: 80%; max-width: 320px; padding: 6px 10px; font-size: 14px; border-radius: 4px 0 0 4px; border: 1px solid #444; background-color: #222; color: white;"
-  />
-  <button
-    id="searchButton"
-    style="padding: 6px 12px; font-size: 14px; border-radius: 0 4px 4px 0; border: 1px solid #444; border-left: none; background-color: #333; color: white; cursor: pointer;"
-    title="検索"
-  >
-    🔍
-  </button>
-</div>
+        <section class="block" aria-labelledby="intro-title">
+          <h2 id="intro-title">Group Songs</h2>
+          <div class="grid" id="intro-grid"></div>
+        </section>
 
-
-    </div>
-
-    <div id="frameListWrapper">
-      <h3 id="frameListTitle">歌枠一覧</h3>
-      <div id="frameListTabs"></div>
-      <div id="frameListPages"></div>
-    </div>
-  </div>
-
-  <div id="playlist">
-    <div id="playlistWrapper">
-  <div id="playlistTabs"></div>
-  <div id="playlistPages"></div>
-</div>
-  </div>
-
-  <!-- モバイル用タブUI（デフォルトは非表示） -->
-<div id="tabContainer" style="display:none;">
-  <div id="tabButtons">
-    <button id="tabPlaylist" class="active">プレイリスト</button>
-    <button id="tabFrameList">歌枠一覧</button>
-    
-  </div>
-  <div id="tabContents">
-     <div id="playlistMobile" class="tabContent active">
-  <div id="playlistMobilePaginationTop"></div> <!-- 🔼 上に追加 -->
-  <div id="playlistMobileContent"></div>        <!-- 曲リスト本体 -->
-  <div id="playlistMobilePagination"></div>     <!-- 🔽 既存または追加 -->
-  </div>
-    <div id="frameListMobile" class="tabContent">
-  <div id="frameListMobilePaginationTop"></div> <!-- ← 上部にも追加 -->
-  <ul id="frameListMobileList"></ul>
-  <div id="frameListMobilePagination"></div> <!-- ← 既存の下部 -->
-</div>
-
-   
-
-
-  </div>
-</div>
-
-
-
-
-
-
-
-
-    <script>
-      // 動画リスト
-      // GoogleスプレッドシートのCSVデータURL
-      const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS5KPXtSwvF34dTvt8Uhu7TLm7E1oZ_eN5--LJKB0yGGldDfOrKpM4IwqB0ct5q1hjvOjFV05FfHXu_/pub?gid=0&single=true&output=csv';
-
-      async function fetchCSVData() {
-  const response = await fetch(csvUrl);
-  const rows = (await response.text()).split("\n").map(r => r.split(","));
-
-  const frameList = extractFrameList(rows); // ← ここで取得
-
-  // ★ プレイリスト作成処理はそのままでOK
-  const playList = rows.slice(2).map(row => {
-  const videoUrl = row[4];
-  if (!videoUrl) return null;
-  const { videoId, startSeconds } = parseYouTubeUrl(videoUrl);
- if (!videoId || row[6] === '埋め込み不可' || row[6] === '非公開') return null;
-
-  const duration = parseInt(row[5], 10);
-  const title = row[2];
-  const artist = row[3];
-  const endSeconds = startSeconds + duration;
-  const frameName = row[12]?.trim();  // ← ここで枠名を取得（M列）
-
-  return { videoId, startSeconds, endSeconds, title, artist, frameName };
-}).filter(item => item !== null);
-
-
-  return { playList, frameList };
-}
-
-
-
-
-
-
-      // Iframe APIの準備
-      var tag = document.createElement('script');
-      tag.src = "https://www.youtube.com/iframe_api";
-      var firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-      // プレイヤーの設定
-      var player;
-      var playList = [];
-      var originalPlayList = []; // 元の順番を保存しておく変数
-
-      window.onYouTubeIframeAPIReady = async function () {
-  const { playList: pList, frameList: fList } = await fetchCSVData();
-
-  playList = pList;
-  originalPlayList = JSON.parse(JSON.stringify(pList));
-  frameList = fList;
-
-  renderFrameList(); // 歌枠一覧描画
-  renderPlaylistWithTabs();       // プレイリスト描画
-
-  copyContentToMobilePlaylist(); // ←ここでコピー
-
-  player = new YT.Player('player', {
-    height: '360',
-    width: '640',
-    events: {
-      'onReady': onPlayerReady,
-      'onStateChange': onPlayerStateChange
-    }
-  });
-};
-
-
-
-
-
-      // プレイヤーの準備完了後の処理（最初の動画のセット）
-      var isReady = false;
-      var nowPlaying = 0;
-      var isNextVideo = false;
-
-      function onPlayerReady(event) {
-        player.cueVideoById(playList[nowPlaying]);
-        document.getElementById("song" + nowPlaying).style.color = 'red';
-        document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
-        updateYouTubeLink(); // ← 追加
-        isReady = true;
-      }
-
-      function onPlayerStateChange(event) {
-        if (event.data == YT.PlayerState.ENDED && !isNextVideo) {
-          document.getElementById("song" + nowPlaying).style.color = 'white';
-          nowPlaying += 1;
-          if (playList.length <= nowPlaying) nowPlaying = 0;
-          isNextVideo = true;
-          player.loadVideoById(playList[nowPlaying]);
-          player.playVideo();
-          document.getElementById("song" + nowPlaying).style.color = 'red';
-          document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
-          updateYouTubeLink(); // ← 追加
-        } else if (event.data == YT.PlayerState.PLAYING && isNextVideo) {
-          isNextVideo = false;
-        }
-      }
-
-
-      // 配列をランダムに並び替える関数
-      function shuffleArray(array) {
-  const copied = array.slice();
-  for (let i = copied.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copied[i], copied[j]] = [copied[j], copied[i]];
-  }
-  return copied;
-}
-
-      // 初期表示時
-renderPlaylistWithTabs();
-renderMobilePlaylist();
-
-
-// シャッフル後
-document.getElementById("shuffleButton").addEventListener("click", () => {
-  playList = shuffleArray(originalPlayList); // playList からシャッフルした新リスト
-  nowPlaying = 0;
-  renderPlaylistWithTabs();
-  renderMobilePlaylist();
-
-  if (playList.length > 0 && isReady) {
-    player.cueVideoById(playList[nowPlaying]);
-    document.getElementById("song" + nowPlaying).style.color = 'red';
-    document.getElementById("playlist").scrollTop = 0;
-    copyContentToMobilePlaylist();
-  }
-});
-
-
-
-      document.getElementById("dedupButton").addEventListener("click", function () {
-        // 元の順番のリストから被り除去
-        const deduped = removeDuplicatesFromPlaylist(originalPlayList);
-        playList = deduped;
-        nowPlaying = 0;
-        renderPlaylistWithTabs();
-  renderMobilePlaylist();
-        player.cueVideoById(playList[nowPlaying]);
-        document.getElementById("song" + nowPlaying).style.color = 'red';
-        document.getElementById("playlist").scrollTop = 0;
-        copyContentToMobilePlaylist()
-      });
-
-      document.getElementById("resetButton").addEventListener("click", function () {
-        playList = JSON.parse(JSON.stringify(originalPlayList)); // 元の順番に戻す
-        nowPlaying = 0;
-        renderPlaylistWithTabs();
-  renderMobilePlaylist();
-        player.cueVideoById(playList[nowPlaying]);
-        document.getElementById("song" + nowPlaying).style.color = 'red';
-        document.getElementById("playlist").scrollTop = 0;
-        copyContentToMobilePlaylist()
-      });
-
-      document.getElementById("dedupShuffleButton").addEventListener("click", function () {
-        const deduped = removeDuplicatesFromPlaylist(originalPlayList);
-        playList = shuffleArray(deduped);
-        nowPlaying = 0;
-        renderPlaylistWithTabs();
-  renderMobilePlaylist();
-        player.cueVideoById(playList[nowPlaying]);
-        document.getElementById("song" + nowPlaying).style.color = 'red';
-        document.getElementById("playlist").scrollTop = 0;
-        copyContentToMobilePlaylist()
-      });
-
-      document.getElementById("prevBtn").addEventListener("click", function () {
-        if (!isReady) return;
-        document.getElementById("song" + nowPlaying).style.color = 'white';
-        nowPlaying = (nowPlaying - 1 + playList.length) % playList.length;
-        player.loadVideoById(playList[nowPlaying]);
-        document.getElementById("song" + nowPlaying).style.color = 'red';
-        document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
-        updateYouTubeLink();
-        copyContentToMobilePlaylist()
-      });
-
-      document.getElementById("nextBtn").addEventListener("click", function () {
-        if (!isReady) return;
-        document.getElementById("song" + nowPlaying).style.color = 'white';
-        nowPlaying = (nowPlaying + 1) % playList.length;
-        player.loadVideoById(playList[nowPlaying]);
-        document.getElementById("song" + nowPlaying).style.color = 'red';
-        document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
-        updateYouTubeLink();
-        copyContentToMobilePlaylist()
-      });
+      </section>
 
       
-      // リストをクリックされた時の処理
-      function pushList (id) {
-        if (!isReady) return;
-        document.getElementById("song" + nowPlaying).style.color = 'white';
-        nowPlaying = Number(id);
-        player.loadVideoById(playList[nowPlaying]);
-        document.getElementById("song" + nowPlaying).style.color = 'red';
-        document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    </main>
+
+  </div>
+
+  <script>
+    // Minimal data model (replace with real data or generate at build time)
+    const VIDEOS = [
+      {title: 'ロストメモリー',type:'original',youtubeId: 'QjULtzL4zb4'},
+      {title: 'ゴーストレタッチ',type:'original',youtubeId: 'c6I-bWqApXc'},
+      {title: '快晴',type:'cover',youtubeId: '2YpUBL04rzo'},
+      {title: 'Over Myth',type:'group',youtubeId: '8Wy_S3ZzYl8'},
+    ];
+
+    const playerData = []; // プレイヤーの設定用に保持
+
+    const grid = document.getElementById('orig-grid');
+
+
+
+    var tag = document.createElement('script');
+  tag.src = "https://www.youtube.com/iframe_api";
+  var firstScriptTag = document.getElementsByTagName('script')[0];
+  firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+  const players = {};
+
+  function onYouTubeIframeAPIReady() {
+  // プレイヤー情報を作る前に HTML を構築
+  renderHome();
+
+  playerData.forEach((item) => {
+    players[item.id] = new YT.Player(item.id, {
+      videoId: item.videoId,
+      playerVars: {
+        autoplay: 0,
+        controls: 1,
+        rel: 0,
+        modestbranding: 1
       }
-
-      // YouTubeのURLから videoId と startSeconds を抽出する関数
-      function parseYouTubeUrl(url) {
-      const idMatch = url.match(/(?:v=|youtu\.be\/|\/live\/)([a-zA-Z0-9_-]{11})/);
-      const videoId = idMatch ? idMatch[1] : null;
-
-      // 再生秒数を抽出（t=45 や &t=90s など）
-      let startSeconds = 0;
-      const timeMatch = url.match(/[?&]t=(\d+)(s)?/);
-      if (timeMatch && timeMatch[1]) {
-      startSeconds = parseInt(timeMatch[1], 10);
-      }
-
-      return { videoId, startSeconds };
-      }
-
-      // 重複を排除（後方を優先）
-      function removeDuplicatesFromPlaylist(playlist) {
-        const seen = new Map();
-        for (let i = playlist.length - 1; i >= 0; i--) {
-          const key = playlist[i].title.trim() + '|' + playlist[i].artist.trim();
-          if (!seen.has(key)) {
-            seen.set(key, playlist[i]);
-          }
-        }
-        return Array.from(seen.values()).reverse(); // 元の順に戻す
-      }
-
-      function updateYouTubeLink() {
-        const videoId = playList[nowPlaying].videoId;
-        const startSeconds = playList[nowPlaying].startSeconds || 0;
-        const url = `https://www.youtube.com/watch?v=${videoId}&t=${startSeconds}s`;
-        document.getElementById('youtubeLink').href = url;
-      }
-
-      function renderFrameList() {
-  const tabsContainer = document.getElementById("frameListTabs");
-  const pagesContainer = document.getElementById("frameListPages");
-  tabsContainer.innerHTML = "";
-  pagesContainer.innerHTML = "";
-
-  const pageSize = 10;
-  const totalPages = Math.ceil(frameList.length / pageSize);
-
-  for (let i = 0; i < totalPages; i++) {
-    // タブボタン作成
-    const tabBtn = document.createElement("button");
-    tabBtn.textContent = i + 1;
-    if (i === 0) tabBtn.classList.add("active");
-    tabBtn.addEventListener("click", () => {
-      document.querySelectorAll(".frameListPage").forEach(p => p.classList.remove("active"));
-      document.querySelectorAll("#frameListTabs button").forEach(b => b.classList.remove("active"));
-      document.getElementById(`frameListPage${i}`).classList.add("active");
-      tabBtn.classList.add("active");
     });
-    tabsContainer.appendChild(tabBtn);
-
-    // ページ内容作成
-    const page = document.createElement("div");
-    page.classList.add("frameListPage");
-    if (i === 0) page.classList.add("active");
-    page.id = `frameListPage${i}`;
-
-    const ul = document.createElement("ul");
-    ul.style.listStyle = "none";
-    ul.style.padding = "0";
-    ul.style.margin = "0";
-
-    const pageItems = frameList.slice(i * pageSize, (i + 1) * pageSize);
-    pageItems.forEach((frame, index) => {
-      const li = document.createElement("li");
-      li.textContent = `${frame.date} - ${frame.frameName}`;
-      li.style.padding = "6px 4px";
-      li.style.borderBottom = "1px solid #333";
-      li.style.cursor = "pointer";
-
-      // グレーアウト処理（埋め込み不可 or 非公開）
-      if (!frame.isEmbeddable || !frame.videoId) {
-        li.style.color = "#888";
-      }
-
-      li.addEventListener("click", () => {
-        const clickedVideoId = frame.videoId;
-
-        // videoIdなし（非公開など）は何もしない
-        if (!clickedVideoId) return;
-
-        // 埋め込み不可ならYouTubeページを新タブで開く
-        if (!frame.isEmbeddable) {
-          player.loadVideoById(frame.videoId);
-  updatePlayingHighlight();
-  updateYouTubeLink();
-          return;
-        }
-
-        // 選択中の色リセット＆セット
-        document.querySelectorAll("#frameListPages li").forEach(el => el.classList.remove("selected-frame"));
-        li.classList.add("selected-frame");
-
-        // プレイリストを絞り込み
-        const filteredList = originalPlayList.filter(video => video.videoId === clickedVideoId);
-
-        if (filteredList.length === 0) return;
-
-        playList = filteredList;
-        nowPlaying = 0;
-
-        renderPlaylistWithTabs();
-        renderMobilePlaylist();
-
-        if (isReady) {
-          player.loadVideoById(playList[nowPlaying].videoId, playList[nowPlaying].startSeconds);
-          updatePlayingHighlight();
-          updateYouTubeLink();
-        }
-
-      });
-
-      ul.appendChild(li);
-    });
-
-    page.appendChild(ul);
-    pagesContainer.appendChild(page);
-  }
+  });
 }
 
 
 
+    // Simple state
+    let playlist = [];
+    let currentIndex = -1;
+    let isPlaying = false;
+    let isShuffle = false;
+    let isLoop = false;
 
-     function extractFrameList(rows) {
-  const dataRows = rows.slice(2);
-
-  // 枠一覧（L: 日付, M: 枠名）
-  const frameSet = new Map();
-
-  dataRows.forEach(row => {
-    const date = row[11]?.trim();     // L列 (インデックス11)
-    const frameName = row[12]?.trim(); // M列 (インデックス12)
-    if (date && frameName && !frameSet.has(frameName)) {
-      frameSet.set(frameName, { date, frameName });
+    // View switching
+    const views = ['home','list'];
+    function showView(name){
+      views.forEach(v=>{
+        const el = document.getElementById('view-'+v);
+        if(!el) return;
+        if(v===name) el.classList.remove('hidden'); else el.classList.add('hidden');
+      });
+      // update nav
+      document.querySelectorAll('nav.main-nav a').forEach(a=>a.classList.toggle('active', a.dataset.view===name));
     }
-  });
 
-  // O列が空白でない行のインデックス取得
-  const nonEmptyOColumnIndices = dataRows
-    .map((row, index) => ({ index, value: row[14]?.trim() })) // O列は14
-    .filter(item => item.value !== '')
-    .map(item => item.index);
+    // render grids
+    function makeCard(video, index) {
+  const el = document.createElement('div');
+  el.className = 'card';
 
-  // O列空白でない行のE列URLから動画情報を取得
-  const videos = nonEmptyOColumnIndices.map(i => {
-  const url = dataRows[i][4]; // E列(4)
-  if (!url) return null;
+  const playerDiv = document.createElement('div');
+  const playerId = `player-${index}`;
+  playerDiv.id = playerId;
+  playerDiv.className = 'yt-player';
 
-  const { videoId, startSeconds } = parseYouTubeUrl(url);
-  const embedStatus = dataRows[i][6]?.trim(); // G列(6)
-  const baseFrameName = dataRows[i][14]?.trim() || ''; // O列(14)
+  const iframe = document.createElement('iframe');
+  iframe.src = `https://www.youtube.com/embed/${video.youtubeId}?rel=0&modestbranding=1`;
+  iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+  iframe.allowFullscreen = true;
 
-  let tag = '';
-  if (embedStatus === '非公開') {
-    tag = '[非公開]';
-  } else if (embedStatus === '埋め込み不可') {
-    tag = '[埋め込み不可]';
-  }
+  playerDiv.appendChild(iframe);
+  el.appendChild(playerDiv);
 
-  const frameName = `${baseFrameName} ${tag}`.trim();
-  const isEmbeddable = tag === '';
-
-  return {
-    rowIndex: i,
-    videoId,
-    startSeconds,
-    frameName,
-    isEmbeddable
-  };
-}).filter(v => v !== null);
-
-
-  const frameList = Array.from(frameSet.values()).map((frame, index) => {
-  const video = videos[index];
-  return {
-    ...frame,
-    frameName: video ? video.frameName : frame.frameName,  // ★ 修正ポイント
-    videoId: video ? video.videoId : null,
-    startSeconds: video ? video.startSeconds : 0,
-    isEmbeddable: video ? video.isEmbeddable : false
-  };
-});
-
-
-
-
-  return frameList;
+  return { element: el, playerId: playerId, videoId: video.youtubeId };
 }
 
 
 
+    function renderHome() {
+  const orig = document.getElementById('orig-grid'); orig.innerHTML = '';
+  const cover = document.getElementById('cover-grid'); cover.innerHTML = '';
+  const intro = document.getElementById('intro-grid'); intro.innerHTML = '';
+  playerData.length = 0; // ← 前回のデータをクリア
 
-
-
-
-
-
-
-   // タブ切り替えのイベント設定
-function setupTabButtons() {
-  const tabFrameList = document.getElementById('tabFrameList');
-  const tabPlaylist = document.getElementById('tabPlaylist');
-  const frameListMobile = document.getElementById('frameListMobile');
-  const playlistMobile = document.getElementById('playlistMobile');
-
-  tabFrameList.addEventListener('click', () => {
-    tabFrameList.classList.add('active');
-    tabPlaylist.classList.remove('active');
-    frameListMobile.classList.add('active');
-    playlistMobile.classList.remove('active');
-  });
-
-  tabPlaylist.addEventListener('click', () => {
-    tabPlaylist.classList.add('active');
-    tabFrameList.classList.remove('active');
-    playlistMobile.classList.add('active');
-    frameListMobile.classList.remove('active');
-  });
-}
-
-
-
-// 表示切替（レスポンシブ対応）
-function handleResize() {
-  const tabContainer = document.getElementById('tabContainer');
-  const frameListWrapper = document.getElementById('frameListWrapper');
-  const playlist = document.getElementById('playlist');
-
-  if (window.innerWidth <= 1080) {
-    tabContainer.style.display = 'block';
-    frameListWrapper.style.display = 'none';
-    playlist.style.display = 'none';
-
-    renderMobileFrameList(frameList); // ✅ イベント付き
-    renderMobilePlaylist();           // ✅ イベント付き
-  } else {
-    tabContainer.style.display = 'none';
-    frameListWrapper.style.display = 'flex';
-    playlist.style.display = 'block';
-  }
-
-  adjustContentPadding();
-}
-
-
-
-
-
-// iframe高さをframeListに合わせる（必要に応じて）
-function syncFrameListHeight() {
-  const playerContainer = document.getElementById("playerContainer");
-  const iframe = document.querySelector("#player iframe");
-  const frameList = document.getElementById("frameListWrapper");
-
-  if (window.innerWidth > 768 && iframe && frameList && playerContainer) {
-    const totalHeight = playerContainer.offsetHeight + (iframe.offsetHeight || 360);
-    frameList.style.height = totalHeight + "px";
-  } else if (frameList) {
-    frameList.style.height = "auto";
-  }
-}
-
-// イベント登録
-window.addEventListener('DOMContentLoaded', () => {
-  setupTabButtons();
-  handleResize();             // ← 最初からモバイル・PCに応じて出し分け
-  syncFrameListHeight();      // 高さ調整も忘れずに
-});
-
-window.addEventListener('resize', () => {
-  handleResize();
-  syncFrameListHeight();
-});
-
-function renderMobileFrameList(frameList) {
-  const pageSize = 10;
-  const listContainer = document.getElementById("frameListMobileList");
-  const paginationTop = document.getElementById("frameListMobilePaginationTop");
-  const paginationBottom = document.getElementById("frameListMobilePagination");
-  let currentPage = 0;
-  let currentSelected = null; // 現在選択されたアイテムを保持
-
-  function renderPage(pageIndex) {
-    listContainer.innerHTML = "";
-    const start = pageIndex * pageSize;
-    const end = start + pageSize;
-    const pageItems = frameList.slice(start, end);
-
-    pageItems.forEach((frame, i) => {
-      const li = document.createElement("li");
-      li.textContent = `${frame.date} - ${frame.frameName}`;
-      li.style.padding = "6px 4px";
-      li.style.borderBottom = "1px solid #333";
-
-      // ステータスによるスタイル設定
-      if (!frame.isEmbeddable || !frame.videoId) {
-        li.style.color = "#888";
-      }
-
-      li.addEventListener("click", () => {
-        const clickedVideoId = frame.videoId;
-
-        // videoIdなし（非公開など）は何もしない
-        if (!clickedVideoId) return;
-
-        // 埋め込み不可ならYouTubeページを新タブで開く
-        if (!frame.isEmbeddable) {
-          player.loadVideoById(frame.videoId);
-  updatePlayingHighlight();
-  updateYouTubeLink();
-          return;
-        }
-
-        if (currentSelected) {
-          currentSelected.style.color = 'white'; // 以前選択したアイテムを黒に戻す
-        }
-        li.style.color = 'red'; // 現在選択されたアイテムを赤に
-        currentSelected = li; // 現在選択されたアイテムを保持
-
-        const filtered = originalPlayList.filter(v => v.videoId === frame.videoId);
-        if (filtered.length === 0) return;
-
-        playList = filtered;
-        nowPlaying = 0;
-
-        renderPlaylistWithTabs();
-        renderMobilePlaylist();
-
-        if (isReady) {
-          player.loadVideoById(playList[nowPlaying].videoId, playList[nowPlaying].startSeconds);
-          updatePlayingHighlight();
-          updateYouTubeLink();
-        }
-      });
-
-      listContainer.appendChild(li);
+  VIDEOS.forEach((v, index) => {
+    const c = makeCard(v, index);
+    playerData.push({
+      id: c.playerId,
+      videoId: c.videoId
     });
 
-    renderPaginationButtons();
-  }
+    if (v.type === 'original') orig.appendChild(c.element);
+    else if (v.type === 'cover') cover.appendChild(c.element);
+    else if (v.type === 'group') intro.appendChild(c.element);
+  });
+}
 
-  function renderPaginationButtons() {
-    paginationTop.innerHTML = "";
-    paginationBottom.innerHTML = "";
-    const totalPages = Math.ceil(frameList.length / pageSize);
-    for (let i = 0; i < totalPages; i++) {
-      [paginationTop, paginationBottom].forEach(container => {
-        const btn = document.createElement("button");
-        btn.textContent = i + 1;
-        if (i === currentPage) btn.classList.add("active");
-        btn.addEventListener("click", () => {
-          currentPage = i;
-          renderPage(currentPage);
-        });
-        container.appendChild(btn);
+
+    function renderList(){
+      const cards = document.getElementById('list-cards'); cards.innerHTML='';
+      const tbody = document.getElementById('table-body'); tbody.innerHTML='';
+      const artistSet = new Set(['all']);
+      VIDEOS.forEach(v=>artistSet.add(v.artist));
+      const filterArtist = document.getElementById('filter-artist'); filterArtist.innerHTML='';
+      Array.from(artistSet).forEach(a=>{
+        const opt = document.createElement('option'); opt.value=a; opt.textContent=a; filterArtist.appendChild(opt);
+      });
+
+      VIDEOS.forEach(v=>{
+        cards.appendChild(makeCard(v));
+        const tr = document.createElement('tr');
+        tr.innerHTML=`<td>${v.title}</td><td>${v.artist}</td><td>${v.date}</td><td>${v.type}</td>`;
+        tbody.appendChild(tr);
       });
     }
-  }
 
-  renderPage(currentPage);
-}
+    function renderSearchResults(q){
+      const out = document.getElementById('search-results'); out.innerHTML='';
+      if(!q) return;
+      const qlow = q.toLowerCase();
+      const results = VIDEOS.filter(v=>v.title.toLowerCase().includes(qlow) || v.artist.toLowerCase().includes(qlow));
+      if(results.length===0){ out.textContent='見つかりませんでした'; return; }
+      const list = document.createElement('div'); list.className='grid';
+      results.forEach(r=>list.appendChild(makeCard(r)));
+      out.appendChild(list);
+    }
 
+    // Player
+    function setPlayerInfo(v){
+      document.getElementById('player-title').textContent = v? v.title : '再生されていません';
+      document.getElementById('player-sub').textContent = v? v.artist + ' · ' + v.date : '';
+    }
 
+    function playQueue(arr, start=0){
+      playlist = arr.slice();
+      currentIndex = start;
+      isPlaying = true;
+      // In a static mock, we don't play real audio — but update UI
+      updatePlayerUI();
+      // simulate "playing" by highlighting current
+      setPlayerInfo(playlist[currentIndex]);
+    }
 
+    function playSingle(v){
+      playQueue([v],0);
+    }
 
+    function updatePlayerUI(){
+      document.getElementById('play-btn').textContent = isPlaying? '⏸' : '▶';
+      document.getElementById('loop-btn').textContent = isLoop? '連続(ON)' : '連続';
+      document.getElementById('shuffle-btn').textContent = isShuffle? 'ランダム(ON)' : 'ランダム';
+    }
 
-let currentSelected = null; // 選択中のリストアイテム保持
-
-function copyContentToMobilePlaylist() {
-
-  const playlist = document.getElementById('playlist');
-  const playlistMobileContent = document.getElementById('playlistMobileContent');
-
-
-  if (playlist && playlistMobileContent) {
-    playlistMobileContent.innerHTML = '';
-    const items = playlist.querySelectorAll('.playparts');
-    items.forEach((item, index) => {
-      const clone = item.cloneNode(true);
-      clone.addEventListener("click", () => {
-        if (!isReady) return;
-        document.getElementById("song" + nowPlaying).style.color = 'white';
-        nowPlaying = index;
-        player.loadVideoById(playList[nowPlaying]);
-        document.getElementById("song" + nowPlaying).style.color = 'red';
-        document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
-        updateYouTubeLink();
-      });
-      playlistMobileContent.appendChild(clone);
-    });
-  }
-}
-
-function renderMobilePlaylist() {
-  const topPagination = document.getElementById('playlistMobilePaginationTop');
-  const bottomPagination = document.getElementById('playlistMobilePagination');
-  const contentContainer = document.getElementById('playlistMobileContent');
-
-  const pageSize = 20;
-  const totalPages = Math.ceil(playList.length / pageSize);
-  let currentPage = 0;
-
-  function renderPage(pageIndex) {
-    contentContainer.innerHTML = "";
-    const start = pageIndex * pageSize;
-    const end = start + pageSize;
-
-    const items = playList.slice(start, end);
-    items.forEach((item, index) => {
-      const globalIndex = start + index;
-      const div = document.createElement("div");
-      div.classList.add("playparts");
-
-      div.innerHTML = `
-        <p>
-          <span class="songtitle">${item.title}</span>
-          <span class="time">（${Math.floor((item.endSeconds - item.startSeconds) / 60)}:${String((item.endSeconds - item.startSeconds) % 60).padStart(2, '0')}）</span>
-        </p>
-        <p class="artist">${item.artist}</p>
-      `;
-
-      div.addEventListener("click", () => {
-        if (!isReady) return;
-        document.getElementById("song" + nowPlaying).style.color = 'white';
-        nowPlaying = globalIndex;
-        player.loadVideoById(playList[nowPlaying]);
-        document.getElementById("song" + nowPlaying).style.color = 'red';
-        document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
-        updateYouTubeLink();
-      });
-
-      contentContainer.appendChild(div);
-    });
-
-    renderPaginationButtons(pageIndex);
-  }
-
-  function renderPaginationButtons(activeIndex) {
-    const makeButtons = (container) => {
-      container.innerHTML = "";
-      for (let i = 0; i < totalPages; i++) {
-        const btn = document.createElement("button");
-        btn.textContent = i + 1;
-        if (i === activeIndex) btn.classList.add("active");
-
-        btn.addEventListener("click", () => {
-          currentPage = i;
-          renderPage(i);
-        });
-
-        container.appendChild(btn);
+    function nextTrack(){
+      if(playlist.length===0) return;
+      if(isShuffle){
+        currentIndex = Math.floor(Math.random()*playlist.length);
+      } else {
+        currentIndex++;
+        if(currentIndex>=playlist.length){
+          if(isLoop) currentIndex=0; else { isPlaying=false; updatePlayerUI(); return; }
+        }
       }
-    };
+      setPlayerInfo(playlist[currentIndex]);
+    }
+    function prevTrack(){
+      if(playlist.length===0) return;
+      currentIndex = Math.max(0, currentIndex-1);
+      setPlayerInfo(playlist[currentIndex]);
+    }
 
-    makeButtons(topPagination);
-    makeButtons(bottomPagination);
-  }
+    // helpers
+    function allVideosSorted(){
+      return VIDEOS.slice().sort((a,b)=> new Date(b.date) - new Date(a.date));
+    }
 
-  renderPage(currentPage);
-}
+    // events bind
+    document.addEventListener('DOMContentLoaded', ()=>{
+      // initial render
+      renderList();
 
-
-function renderPlaylistWithTabs() {
-  const tabsContainer = document.getElementById("playlistTabs");
-  const pagesContainer = document.getElementById("playlistPages");
-
-  tabsContainer.innerHTML = "";
-  pagesContainer.innerHTML = "";
-
-  const pageSize = 20;
-  const totalPages = Math.ceil(playList.length / pageSize);
-
-  for (let i = 0; i < totalPages; i++) {
-    // タブボタン（PC用）
-    const tabBtn = document.createElement("button");
-    tabBtn.textContent = i + 1;
-    if (i === 0) tabBtn.classList.add("active");
-
-    tabBtn.addEventListener("click", () => {
-      document.querySelectorAll(".playlistPage").forEach(p => p.classList.remove("active"));
-      document.querySelectorAll("#playlistTabs button").forEach(b => b.classList.remove("active"));
-      document.getElementById(`playlistPage${i}`).classList.add("active");
-      tabBtn.classList.add("active");
-    });
-
-    tabsContainer.appendChild(tabBtn);
-
-    // ページ本体
-    const page = document.createElement("div");
-    page.classList.add("playlistPage");
-    if (i === 0) page.classList.add("active");
-    page.id = `playlistPage${i}`;
-
-    const start = i * pageSize;
-    const end = start + pageSize;
-    const items = playList.slice(start, end);
-
-    items.forEach((item, index) => {
-      const globalIndex = start + index;
-      const div = document.createElement("div");
-      div.classList.add("playparts");
-
-      div.innerHTML = `
-        <p>
-          <span class="songtitle" id="song${globalIndex}">${item.title}</span>
-          <span class="time">（${Math.floor((item.endSeconds - item.startSeconds) / 60)}:${String((item.endSeconds - item.startSeconds) % 60).padStart(2, '0')}）</span>
-        </p>
-        <p class="artist">${item.artist}</p>
-      `;
-
-      div.addEventListener("click", () => {
-        if (!isReady) return;
-        document.getElementById("song" + nowPlaying).style.color = 'white';
-        nowPlaying = globalIndex;
-        player.loadVideoById(playList[nowPlaying]);
-        document.getElementById("song" + nowPlaying).style.color = 'red';
-        document.getElementById("song" + nowPlaying).scrollIntoView({ behavior: 'smooth', block: 'center' });
-        updateYouTubeLink();
+      // nav
+      document.querySelectorAll('nav.main-nav a').forEach(a=>{
+        a.addEventListener('click', (e)=>{ e.preventDefault(); showView(a.dataset.view); });
+      });
+      document.getElementById('home-link').addEventListener('click', (e)=>{ e.preventDefault(); showView('home'); });
+      document.getElementById('menu-toggle').addEventListener('click', ()=>{
+        const nav = document.querySelector('nav.main-nav'); nav.style.display = nav.style.display==='flex' ? 'none' : 'flex';
       });
 
-      page.appendChild(div);
+      // home play buttons
+      document.getElementById('play-all-home').addEventListener('click', ()=> playQueue(allVideosSorted()));
+      document.getElementById('shuffle-home').addEventListener('click', ()=> { isShuffle=true; playQueue(allVideosSorted()); updatePlayerUI(); });
+
+      // list controls
+      document.getElementById('toggle-list-mode').addEventListener('click', ()=>{
+        const table = document.getElementById('list-table'); const cards = document.getElementById('list-cards');
+        const showingCards = cards.classList.contains('hidden') === false;
+        if(showingCards){ cards.classList.add('hidden'); table.classList.remove('hidden'); document.getElementById('toggle-list-mode').textContent='テーブル表示'; }
+        else { cards.classList.remove('hidden'); table.classList.add('hidden'); document.getElementById('toggle-list-mode').textContent='カード表示'; }
+      });
+      document.getElementById('play-all-list').addEventListener('click', ()=> playQueue(allVideosSorted()));
+      document.getElementById('shuffle-list').addEventListener('click', ()=> { isShuffle=true; playQueue(allVideosSorted()); updatePlayerUI(); });
+
+      // search
+      document.getElementById('search-btn').addEventListener('click', ()=> { const q = document.getElementById('global-search').value.trim(); renderSearchResults(q); showView('search'); });
+      document.getElementById('global-search').addEventListener('keyup', (e)=>{ if(e.key==='Enter'){ document.getElementById('search-btn').click(); } });
+
+      // player controls
+      document.getElementById('play-btn').addEventListener('click', ()=>{ isPlaying=!isPlaying; updatePlayerUI(); });
+      document.getElementById('next-btn').addEventListener('click', ()=> nextTrack());
+      document.getElementById('prev-btn').addEventListener('click', ()=> prevTrack());
+      document.getElementById('shuffle-btn').addEventListener('click', ()=>{ isShuffle=!isShuffle; updatePlayerUI(); });
+      document.getElementById('loop-btn').addEventListener('click', ()=>{ isLoop=!isLoop; updatePlayerUI(); });
+
+      // initial view
+      showView('home'); updatePlayerUI();
     });
 
-    pagesContainer.appendChild(page);
-  }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const searchInput = document.getElementById('searchInput');
-  const searchButton = document.getElementById('searchButton');
-
-  searchButton.addEventListener('click', () => {
-    const keyword = searchInput.value.trim().toLowerCase();
-    if (!keyword) return;
-
-    const filtered = originalPlayList.filter(item => {
-      const title = item.title?.toLowerCase() || '';
-      const artist = item.artist?.toLowerCase() || '';
-      return title.includes(keyword) || artist.includes(keyword);
-    });
-
-    playList = filtered;
-    nowPlaying = 0;
-
-    renderPlaylistWithTabs();
-    renderMobilePlaylist();
-
-    if (playList.length > 0 && isReady) {
-      player.loadVideoById(playList[nowPlaying].videoId, playList[nowPlaying].startSeconds);
-      updatePlayingHighlight();
-      updateYouTubeLink();
-    } else {
-      // 検索結果が0件だった場合
-      document.getElementById('playlistPages').innerHTML = '<p style="padding: 12px;">該当する曲がありません。</p>';
-      document.getElementById('playlistMobileContent').innerHTML = '<p style="padding: 12px;">該当する曲がありません。</p>';
-    }
-  });
-});
-
-
-// フィルター関数は先ほどのままでOK
-function filterPlaylist(keyword) {
-  const playlistPages = document.getElementById('playlistPages');
-  if (!playlistPages) return;
-
-  const songs = playlistPages.querySelectorAll('.playparts');
-  songs.forEach(song => {
-    const titleElem = song.querySelector('.songtitle');
-    const artistElem = song.querySelector('.artist');
-
-    const title = titleElem ? titleElem.textContent.toLowerCase() : '';
-    const artist = artistElem ? artistElem.textContent.toLowerCase() : '';
-
-    if (title.includes(keyword) || artist.includes(keyword)) {
-      song.style.display = '';
-    } else {
-      song.style.display = 'none';
-    }
-  });
-}
-
-// 初期状態の最小幅（例えば1080px）
-const initialWidth = 480;
-
-// ウィンドウのリサイズアニメーションを行う関数
-function resizeWindowSmoothly(targetWidth) {
-  const currentWidth = window.innerWidth;
-  
-  // 現在の幅が目標幅に近い場合はリサイズを停止
-  if (Math.abs(currentWidth - targetWidth) <= 1) {
-    return;
-  }
-
-  // 次に設定する幅を少しずつ近づける
-  const nextWidth = currentWidth + (targetWidth - currentWidth) / 20;
-
-  // リサイズを適用（ディスプレイ上で反映される）
-  window.resizeTo(Math.round(nextWidth), window.innerHeight);
-
-  // 0.05秒後に再度実行（アニメーション）
-  setTimeout(() => resizeWindowSmoothly(targetWidth), 50);
-}
-
-// ページ読み込み時に最小サイズにリサイズしてから最終サイズに変更
-function handlePageLoad() {
-  // 最初にウィンドウサイズを最小幅に設定（最初の読み込み時に最小にリサイズ）
-  window.resizeTo(initialWidth, window.innerHeight);
-
-  // その後、少し遅延してから、現在の画面幅にリサイズ処理を開始
-  setTimeout(() => resizeWindowSmoothly(window.innerWidth), 100);
-}
-
-
-
-    </script>
-  </body>
+  </script>
+</body>
 </html>
